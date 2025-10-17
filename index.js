@@ -189,9 +189,13 @@ const checkFornadasAndNotify = async () => {
     const messagesResult = await pool.query('SELECT message FROM notification_messages');
     const randomMessages = messagesResult.rows;
 
-    // node-cron já está rodando no fuso horário de São Paulo, então podemos usar a hora local do servidor.
-    const now = new Date();    
-    const currentMinutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
+    // Obtém a hora atual especificamente no fuso horário de São Paulo para evitar erros de UTC no servidor.
+    const nowInSaoPaulo = new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
+    const now = new Date(nowInSaoPaulo);
+
+    const currentHours = now.getHours();
+    const currentMinutes = now.getMinutes();
+    const currentMinutesSinceMidnight = currentHours * 60 + currentMinutes;
 
     for (const est of estabelecimentos) {
       const proximaFornada = est.details.proximaFornada;
