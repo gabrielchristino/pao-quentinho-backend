@@ -24,7 +24,7 @@ const pool = new Pool({
 
 // Middlewares
 app.use(cors());
-app.use(express.json()); // Substitui o bodyParser.json()
+app.use(express.json());
 
 // --- Configuração das Notificações Push ---
 // As chaves são lidas das variáveis de ambiente do Railway
@@ -87,14 +87,25 @@ app.get('/api/estabelecimentos', async (req, res) => {
 
 app.post('/api/subscribe', async (req, res) => {
   const { subscription, estabelecimentoId } = req.body;
-  console.log(`POST /api/subscribe para o estabelecimento ${estabelecimentoId}`);
-  
-  // A cláusula ON CONFLICT impede a inserção de inscrições duplicadas
-  // e atualiza o estabelecimento_id se a inscrição já existir.
-  const insertQuery = 'INSERT INTO subscriptions(subscription_data, estabelecimento_id) VALUES($1, $2) ON CONFLICT (subscription_data) DO UPDATE SET estabelecimento_id = $2';
-  
+  console.log(`POST /api/subscribe para o estabelecimento ${estabelecimentoId} com o endpoint ${subscription.endpoint}`);
+
   try {
-    await pool.query(insertQuery, [subscription, estabelecimentoId]);
+    // 1. Insere a inscrição se ela não existir e retorna o ID dela.
+    const upsertSubscriptionQuery = `
+      INSERT INTO subscriptions (subscription_data) VALUES ($1)
+      ON CONFLICT (subscription_data) DO UPDATE SET subscription_data = EXCLUDED.subscription_data
+      RETURNING id;
+    `;
+    const subResult = await pool.query(upsertSubscriptionQuery, [subscription]);
+    const subscriptionId = subResult.rows[0].id;
+
+    // 2. Cria a ligação entre a inscrição e o estabelecimento.
+    const linkQuery = `
+      INSERT INTO establishment_subscriptions (subscription_id, estabelecimento_id) VALUES ($1, $2)
+      ON CONFLICT (subscription_id, estabelecimento_id) DO NOTHING;
+    `;
+    await pool.query(linkQuery, [subscriptionId, estabelecimentoId]);
+
     res.status(201).json({ message: 'Inscrição realizada com sucesso.' });
   } catch (err) {
     console.error('Erro ao salvar inscrição:', err.stack);
@@ -109,8 +120,14 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
     console.log(`Enviando notificação para inscritos do estabelecimento ${estabelecimentoId}...`);
 
     try {
-        // Busca as inscrições para um estabelecimento específico
-        const result = await pool.query('SELECT subscription_data FROM subscriptions WHERE estabelecimento_id = $1', [estabelecimentoId]);
+        // Busca as inscrições para um estabelecimento específico, fazendo o JOIN com a tabela de junção
+        const query = `
+          SELECT s.subscription_data
+          FROM subscriptions s
+          JOIN establishment_subscriptions es ON s.id = es.subscription_id
+          WHERE es.estabelecimento_id = $1;
+        `;
+        const result = await pool.query(query, [estabelecimentoId]);
         const subscriptions = result.rows.map(row => row.subscription_data);
 
         const notificationPayload = {
@@ -168,6 +185,10 @@ const checkFornadasAndNotify = async () => {
     const result = await pool.query('SELECT id, nome, details FROM estabelecimentos');
     const estabelecimentos = result.rows;
 
+    // Otimização: Busca todas as mensagens aleatórias de uma vez, fora do loop
+    const messagesResult = await pool.query('SELECT message FROM notification_messages');
+    const randomMessages = messagesResult.rows;
+
     const now = new Date();
     // Ajuste para o fuso horário de São Paulo (UTC-3)
     now.setHours(now.getUTCHours() - 3);
@@ -195,15 +216,20 @@ const checkFornadasAndNotify = async () => {
       if (currentHours === notificationHours && currentMinutes === notificationMinutes) {
         console.log(`🔥 Hora de notificar para a fornada das ${proximaFornada} no estabelecimento ${est.id} (${est.nome})!`);
 
-        // Dispara a notificação usando a mesma lógica da rota
-        const subscriptionsResult = await pool.query('SELECT subscription_data FROM subscriptions WHERE estabelecimento_id = $1', [est.id]);
+        // Busca as inscrições para o estabelecimento específico
+        const subscriptionsQuery = `
+          SELECT s.subscription_data
+          FROM subscriptions s
+          JOIN establishment_subscriptions es ON s.id = es.subscription_id
+          WHERE es.estabelecimento_id = $1;
+        `;
+        const subscriptionsResult = await pool.query(subscriptionsQuery, [est.id]);
         const subscriptions = subscriptionsResult.rows.map(row => row.subscription_data);
 
         if (subscriptions.length > 0) {
-          // Busca uma mensagem aleatória do banco
-          const messagesResult = await pool.query('SELECT message FROM notification_messages ORDER BY RANDOM() LIMIT 1');
-          const randomMessage = messagesResult.rows.length > 0 
-            ? messagesResult.rows[0].message 
+          // Seleciona uma mensagem aleatória da lista já buscada
+          const randomMessage = randomMessages.length > 0
+            ? randomMessages[Math.floor(Math.random() * randomMessages.length)].message
             : `Uma nova fornada sairá às ${proximaFornada}. Não perca!`; // Fallback
 
           const notificationPayload = {
