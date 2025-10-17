@@ -3,6 +3,9 @@
 // Carrega as variáveis de ambiente do arquivo .env
 require('dotenv').config();
 
+// Log para depuração da variável de ambiente do banco de dados
+console.log(`DATABASE_URL status: ${process.env.DATABASE_URL ? 'Encontrada' : 'NÃO ENCONTRADA'}`);
+
 const express = require('express');
 const webpush = require('web-push');
 const cors = require('cors');
