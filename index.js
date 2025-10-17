@@ -19,6 +19,26 @@ const pool = new Pool({
   }
 });
 
+// Função para testar a conexão com o banco de dados com tentativas
+const connectWithRetry = async (retries = 5, delay = 5000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const client = await pool.connect();
+      console.log('✅ Conexão com o banco de dados estabelecida com sucesso.');
+      client.release(); // Libera o cliente de volta para o pool
+      return;
+    } catch (err) {
+      console.error(`❌ Erro ao conectar ao banco de dados (tentativa ${i + 1}):`, err.message);
+      if (i < retries - 1) {
+        console.log(`Tentando novamente em ${delay / 1000} segundos...`);
+        await new Promise(res => setTimeout(res, delay));
+      } else {
+        throw new Error('Não foi possível conectar ao banco de dados após várias tentativas.');
+      }
+    }
+  }
+};
+
 // Middlewares
 app.use(cors());
 app.use(bodyParser.json());
@@ -69,7 +89,17 @@ app.post('/api/subscribe', async (req, res) => {
 });
 
 // --- Inicialização do Servidor ---
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await connectWithRetry();
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    });
+  } catch (err) {
+    console.error('🔥 Falha ao iniciar o servidor:', err.message);
+    process.exit(1); // Encerra a aplicação se não conseguir conectar ao DB
+  }
+};
+
+startServer();
