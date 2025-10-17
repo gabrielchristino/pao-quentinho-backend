@@ -63,12 +63,24 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 
 // --- Rotas da API ---
 app.get('/api/estabelecimentos', async (req, res) => {
-  console.log('GET /api/estabelecimentos');
+  const userLat = parseFloat(req.query.lat);
+  const userLng = parseFloat(req.query.lng);
+
+  console.log(`GET /api/estabelecimentos para lat: ${userLat}, lng: ${userLng}`);
+
   try {
     const result = await pool.query('SELECT data FROM estabelecimentos');
-    // Extrai o objeto 'data' de cada linha
-    const estabelecimentos = result.rows.map(row => row.data);
-    res.status(200).json(estabelecimentos);
+    let estabelecimentos = result.rows.map(row => row.data);
+
+    // Se as coordenadas do usuário foram fornecidas, calcula a distância
+    if (!isNaN(userLat) && !isNaN(userLng)) {
+      estabelecimentos = estabelecimentos.map(est => {
+        const distanciaKm = calculateDistance(userLat, userLng, est.latitude, est.longitude);
+        return { ...est, distanciaKm };
+      });
+    }
+
+    res.status(200).json(estabelecimentos.sort((a, b) => a.distanciaKm - b.distanciaKm));
   } catch (err) {
     console.error('Erro ao buscar estabelecimentos:', err.stack);
     res.status(500).json({ message: 'Erro ao buscar estabelecimentos.' });
@@ -91,9 +103,36 @@ app.post('/api/subscribe', async (req, res) => {
   }
 });
 
+/**
+ * Calcula a distância em KM entre duas coordenadas geográficas usando a fórmula de Haversine.
+ */
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Raio da Terra em km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distância em km
+}
+
+/**
+ * Converte graus para radianos.
+ */
+function deg2rad(deg) {
+  return deg * (Math.PI / 180);
+}
+
 // --- Inicialização do Servidor ---
 const startServer = async () => {
   try {
+    // Validação "Fail-Fast": Garante que variáveis essenciais existam antes de continuar.
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL não foi encontrada nas variáveis de ambiente.');
+    }
+
     await connectWithRetry();
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
