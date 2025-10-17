@@ -189,12 +189,9 @@ const checkFornadasAndNotify = async () => {
     const messagesResult = await pool.query('SELECT message FROM notification_messages');
     const randomMessages = messagesResult.rows;
 
-    const now = new Date();
-    // Ajuste para o fuso horário de São Paulo (UTC-3)
-    now.setHours(now.getUTCHours() - 3);
-    
-    const currentHours = now.getHours();
-    const currentMinutes = now.getMinutes();
+    // node-cron já está rodando no fuso horário de São Paulo, então podemos usar a hora local do servidor.
+    const now = new Date();    
+    const currentMinutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
 
     for (const est of estabelecimentos) {
       const proximaFornada = est.details.proximaFornada;
@@ -206,14 +203,11 @@ const checkFornadasAndNotify = async () => {
 
       const [fornadaHours, fornadaMinutes] = proximaFornada.split(':').map(Number);
 
-      // Lógica de notificação: notifica 1 hora antes da fornada
-      const notificationTime = new Date();
-      notificationTime.setHours(fornadaHours - 1, fornadaMinutes, 0, 0);
+      // Calcula os minutos desde a meia-noite para a hora da notificação (1h antes da fornada)
+      const notificationMinutesSinceMidnight = (fornadaHours * 60 + fornadaMinutes) - 60;
 
-      const notificationHours = notificationTime.getHours();
-      const notificationMinutes = notificationTime.getMinutes();
-
-      if (currentHours === notificationHours && currentMinutes === notificationMinutes) {
+      // Compara se o minuto atual do dia é o minuto exato para notificar
+      if (currentMinutesSinceMidnight === notificationMinutesSinceMidnight) {
         console.log(`🔥 Hora de notificar para a fornada das ${proximaFornada} no estabelecimento ${est.id} (${est.nome})!`);
 
         // Busca as inscrições para o estabelecimento específico
@@ -286,8 +280,8 @@ const startServer = async () => {
     app.listen(PORT, () => {
       console.log(`🚀 Servidor rodando na porta ${PORT}`);
 
-      // Agenda a verificação de fornadas para rodar a cada minuto.
-      cron.schedule('*/15 * * * *', checkFornadasAndNotify, { timezone: "America/Sao_Paulo" });
+      // Agenda a verificação de fornadas para rodar a cada 5 minutos.
+      cron.schedule('*/5 * * * *', checkFornadasAndNotify, { timezone: "America/Sao_Paulo" });
     });
   } catch (err) {
     console.error('🔥 Falha ao iniciar o servidor:', err.message);

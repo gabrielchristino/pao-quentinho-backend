@@ -11,7 +11,7 @@ const estabelecimentosData = [
     tipo: 'outros',
     horarioAbertura: '07:00',
     horarioFechamento: '21:00',
-    proximaFornada: '16:00',
+    proximaFornada: '21:00', // Notificação às 20:00
     endereco: { rua: 'Av. Nossa Sra. do Sabará', numero: '2001', bairro: 'Vila Santana', cidade: 'São Paulo', estado: 'SP', cep: '04685-004', complemento: '' },
     info: 'Mercado de frutas, vegetais e produtos frescos. Pães e salgados disponíveis na padaria interna.',
     latitude: -23.672309973956033,
@@ -23,7 +23,7 @@ const estabelecimentosData = [
     tipo: 'mercado',
     horarioAbertura: '00:00',
     horarioFechamento: '23:59', // Representando 24 horas
-    proximaFornada: '20:45',
+    proximaFornada: '21:05', // Notificação às 20:05
     endereco: { rua: 'Av. Nossa Sra. do Sabará', numero: '1785', bairro: 'Vila Sofia', cidade: 'São Paulo', estado: 'SP', cep: '04685-004' },
     info: 'Mercado de conveniência com atendimento 24 horas. Lanches, bebidas e produtos de padaria.',
     latitude: -23.670029653701853,
@@ -35,7 +35,7 @@ const estabelecimentosData = [
     tipo: 'padaria',
     horarioAbertura: '06:00',
     horarioFechamento: '23:00',
-    proximaFornada: '21:00',
+    proximaFornada: '21:10', // Notificação às 20:10
     endereco: { rua: 'Av. Nossa Sra. do Sabará', numero: '2148', bairro: 'Jardim Campo Grande', cidade: 'São Paulo', estado: 'SP', cep: '04686-002' },
     info: 'Lanchonete e padaria com variedade de salgados, lanches e pães.',
     latitude: -23.673485126217443,
@@ -47,7 +47,7 @@ const estabelecimentosData = [
     tipo: 'mercado',
     horarioAbertura: '07:00',
     horarioFechamento: '22:00',
-    proximaFornada: '21:15',
+    proximaFornada: '21:15', // Notificação às 20:15
     endereco: { rua: 'R. Moacir Simões da Rocha', numero: '105', bairro: 'Vila Sao Pedro', cidade: 'São Paulo', estado: 'SP', cep: '04674-150' },
     info: 'Supermercado completo com padaria, açougue e uma grande variedade de produtos.',
     latitude: -23.665293867593874,
@@ -59,7 +59,7 @@ const estabelecimentosData = [
     tipo: 'padaria',
     horarioAbertura: '06:00',
     horarioFechamento: '21:30',
-    proximaFornada: '21:30',
+    proximaFornada: '21:20', // Notificação às 20:20
     endereco: { rua: 'R. Antônio do Campo', numero: '444', bairro: 'Pedreira', cidade: 'São Paulo', estado: 'SP', cep: '04459-000' },
     info: 'Padaria tradicional com pães frescos, bolos e salgados.',
     latitude: -23.692614433202063,
@@ -71,7 +71,7 @@ const estabelecimentosData = [
     tipo: 'mercado',
     horarioAbertura: '07:00',
     horarioFechamento: '21:00',
-    proximaFornada: '20:45',
+    proximaFornada: '21:25', // Notificação às 20:25
     endereco: { rua: 'R. Alzira Alves dos Santos', numero: '177', bairro: 'Pedreira', cidade: 'São Paulo', estado: 'SP', cep: '04459-240' },
     info: 'Adega com variedade de bebidas e produtos.',
     latitude: -23.6937513081122,
