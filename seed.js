@@ -18,7 +18,7 @@ const estabelecimentosData = [
   },
   {
     nome: 'OXXO - Sines',
-    tipo: 'outros',
+    tipo: 'mercado',
     horarioAbertura: '00:00',
     horarioFechamento: '23:59', // Representando 24 horas
     proximaFornada: '16:00',
@@ -40,7 +40,7 @@ const estabelecimentosData = [
   },
   {
     nome: 'Pão de Açúcar',
-    tipo: 'outros',
+    tipo: 'mercado',
     horarioAbertura: '07:00',
     horarioFechamento: '22:00',
     proximaFornada: 'N/A',
@@ -62,7 +62,7 @@ const estabelecimentosData = [
   },
   {
     nome: 'Adega Nossa Senhora Lurdes',
-    tipo: 'outros',
+    tipo: 'mercado',
     horarioAbertura: '07:00',
     horarioFechamento: '21:00',
     proximaFornada: 'N/A',
