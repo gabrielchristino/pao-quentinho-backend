@@ -55,8 +55,17 @@ app.get('/api/estabelecimentos', async (req, res) => {
   console.log(`GET /api/estabelecimentos para lat: ${userLat}, lng: ${userLng}`);
 
   try {
-    const result = await pool.query('SELECT data FROM estabelecimentos');
-    let estabelecimentos = result.rows.map(row => row.data);
+    const result = await pool.query('SELECT id, nome, tipo, latitude, longitude, details FROM estabelecimentos');
+    
+    // Remonta o objeto completo que o frontend espera
+    let estabelecimentos = result.rows.map(row => ({
+      id: row.id,
+      nome: row.nome,
+      tipo: row.tipo,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      ...row.details // Combina com os detalhes do JSONB (horario, endereco, etc.)
+    }));
     
     // Se as coordenadas do usuário foram fornecidas, calcula a distância
     if (!isNaN(userLat) && !isNaN(userLng)) {

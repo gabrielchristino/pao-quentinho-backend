@@ -123,8 +123,14 @@ async function seedDatabase() {
     // Insere cada estabelecimento no banco de dados
     console.log('Inserindo novos dados...');
     for (const est of estabelecimentosData) {
-      // O PostegreSQL converte automaticamente o objeto JS em JSONB
-      await client.query('INSERT INTO estabelecimentos (data) VALUES ($1)', [est]);
+      // Separa os campos principais dos detalhes para inserção nas colunas corretas
+      const { id, nome, tipo, latitude, longitude, ...details } = est;
+      
+      const insertQuery = `
+        INSERT INTO estabelecimentos (id, nome, tipo, latitude, longitude, details)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `;
+      await client.query(insertQuery, [id, nome, tipo, latitude, longitude, details]);
     }
 
     console.log('✅ Seed concluído com sucesso!');
