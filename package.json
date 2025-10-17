@@ -1,18 +1,32 @@
 {
   "name": "pao-quentinho-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend para a aplicação Pão Quentinho, gerenciando estabelecimentos e notificações push.",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "db:seed": "node seed.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "pwa",
+    "angular",
+    "node",
+    "express",
+    "push-notifications"
+  ],
+  "author": "Gabriel Christino",
   "license": "ISC",
   "dependencies": {
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^5.1.0",
+    "pg": "^8.12.0",
     "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
   }
 }
