@@ -16,7 +16,7 @@ const pool = new Pool({
 });
 
 // Função para criar as tabelas se elas não existirem
-const initializeDatabase = async () => {
+const initializeDatabase = async (retries = 5, delay = 5000) => {
   const createTablesQuery = `
     CREATE TABLE IF NOT EXISTS subscriptions (
       id SERIAL PRIMARY KEY,
@@ -27,11 +27,21 @@ const initializeDatabase = async () => {
       data JSONB NOT NULL
     );
   `;
-  try {
-    await pool.query(createTablesQuery);
-    console.log('Tabelas verificadas/criadas com sucesso.');
-  } catch (err) {
-    console.error('Erro ao criar tabelas:', err.stack);
+  for (let i = 0; i < retries; i++) {
+    try {
+      await pool.query(createTablesQuery);
+      console.log('Tabelas verificadas/criadas com sucesso.');
+      return; // Sai da função se for bem-sucedido
+    } catch (err) {
+      console.error('Erro ao criar tabelas (tentativa ' + (i + 1) + '):', err.message);
+      if (i < retries - 1) {
+        console.log(`Tentando novamente em ${delay / 1000} segundos...`);
+        await new Promise(res => setTimeout(res, delay));
+      } else {
+        console.error('Não foi possível conectar ao banco de dados após várias tentativas. A aplicação será encerrada.');
+        process.exit(1); // Encerra a aplicação se não conseguir inicializar o DB
+      }
+    }
   }
 };
 
