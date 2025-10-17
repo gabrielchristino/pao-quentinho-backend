@@ -9,7 +9,7 @@ console.log(`DATABASE_URL status: ${process.env.DATABASE_URL ? 'Encontrada' : 'N
 const express = require('express');
 const webpush = require('web-push');
 const cors = require('cors');
-const bodyParser = require('body-parser');
+const cron = require('node-cron');
 const { Pool } = require('pg'); // Importa o driver do PostgreSQL
 
 const app = express();
@@ -24,7 +24,6 @@ const pool = new Pool({
 
 // Middlewares
 app.use(cors());
-app.use(bodyParser.json());
 app.use(express.json()); // Substitui o bodyParser.json()
 
 // --- Configuração das Notificações Push ---
@@ -159,6 +158,68 @@ const connectWithRetry = async (retries = 5, delay = 5000) => {
 };
 
 /**
+ * Função que verifica as próximas fornadas e dispara notificações.
+ * Esta função será agendada para rodar a cada 15 minutos.
+ */
+const checkFornadasAndNotify = async () => {
+  console.log('⏰ Verificando fornadas agendadas...');
+
+  try {
+    const result = await pool.query('SELECT id, nome, details FROM estabelecimentos');
+    const estabelecimentos = result.rows;
+
+    const now = new Date();
+    // Ajuste para o fuso horário de São Paulo (UTC-3)
+    now.setHours(now.getUTCHours() - 3);
+    
+    const currentHours = now.getHours();
+    const currentMinutes = now.getMinutes();
+
+    for (const est of estabelecimentos) {
+      const proximaFornada = est.details.proximaFornada;
+
+      // Ignora se não houver horário de fornada
+      if (!proximaFornada || proximaFornada === 'N/A') {
+        continue;
+      }
+
+      const [fornadaHours, fornadaMinutes] = proximaFornada.split(':').map(Number);
+
+      // Lógica de notificação: notifica 1 hora antes da fornada
+      const notificationTime = new Date();
+      notificationTime.setHours(fornadaHours - 1, fornadaMinutes, 0, 0);
+
+      const notificationHours = notificationTime.getHours();
+      const notificationMinutes = notificationTime.getMinutes();
+
+      if (currentHours === notificationHours && currentMinutes === notificationMinutes) {
+        console.log(`🔥 Hora de notificar para a fornada das ${proximaFornada} no estabelecimento ${est.id} (${est.nome})!`);
+
+        // Dispara a notificação usando a mesma lógica da rota
+        const subscriptionsResult = await pool.query('SELECT subscription_data FROM subscriptions WHERE estabelecimento_id = $1', [est.id]);
+        const subscriptions = subscriptionsResult.rows.map(row => row.subscription_data);
+
+        if (subscriptions.length > 0) {
+          const notificationPayload = {
+            notification: {
+              title: `Está quase na hora em ${est.nome}!`,
+              body: `Uma nova fornada sairá às ${proximaFornada}. Não perca!`,
+              icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
+            }
+          };
+
+          const promises = subscriptions.map(sub => webpush.sendNotification(sub, JSON.stringify(notificationPayload)));
+          await Promise.all(promises);
+          console.log(`✅ Notificações enviadas para ${subscriptions.length} inscritos do estabelecimento ${est.id}.`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao verificar fornadas:', err);
+  }
+};
+
+/**
  * Calcula a distância em KM entre duas coordenadas geográficas usando a fórmula de Haversine.
  */
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -192,6 +253,9 @@ const startServer = async () => {
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
       console.log(`🚀 Servidor rodando na porta ${PORT}`);
+
+      // Agenda a verificação de fornadas para rodar a cada minuto.
+      cron.schedule('*/15 * * * *', checkFornadasAndNotify, { timezone: "America/Sao_Paulo" });
     });
   } catch (err) {
     console.error('🔥 Falha ao iniciar o servidor:', err.message);
