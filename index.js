@@ -200,10 +200,16 @@ const checkFornadasAndNotify = async () => {
         const subscriptions = subscriptionsResult.rows.map(row => row.subscription_data);
 
         if (subscriptions.length > 0) {
+          // Busca uma mensagem aleatória do banco
+          const messagesResult = await pool.query('SELECT message FROM notification_messages ORDER BY RANDOM() LIMIT 1');
+          const randomMessage = messagesResult.rows.length > 0 
+            ? messagesResult.rows[0].message 
+            : `Uma nova fornada sairá às ${proximaFornada}. Não perca!`; // Fallback
+
           const notificationPayload = {
             notification: {
               title: `Está quase na hora em ${est.nome}!`,
-              body: `Uma nova fornada sairá às ${proximaFornada}. Não perca!`,
+              body: randomMessage,
               icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
             }
           };
