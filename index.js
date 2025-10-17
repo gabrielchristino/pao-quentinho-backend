@@ -22,26 +22,6 @@ const pool = new Pool({
   }
 });
 
-// Função para testar a conexão com o banco de dados com tentativas
-const connectWithRetry = async (retries = 5, delay = 5000) => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const client = await pool.connect();
-      console.log('✅ Conexão com o banco de dados estabelecida com sucesso.');
-      client.release(); // Libera o cliente de volta para o pool
-      return;
-    } catch (err) {
-      console.error(`❌ Erro ao conectar ao banco de dados (tentativa ${i + 1}):`, err.message);
-      if (i < retries - 1) {
-        console.log(`Tentando novamente em ${delay / 1000} segundos...`);
-        await new Promise(res => setTimeout(res, delay));
-      } else {
-        throw new Error('Não foi possível conectar ao banco de dados após várias tentativas.');
-      }
-    }
-  }
-};
-
 // Middlewares
 app.use(cors());
 app.use(bodyParser.json());
@@ -77,16 +57,19 @@ app.get('/api/estabelecimentos', async (req, res) => {
   try {
     const result = await pool.query('SELECT data FROM estabelecimentos');
     let estabelecimentos = result.rows.map(row => row.data);
-
+    
     // Se as coordenadas do usuário foram fornecidas, calcula a distância
     if (!isNaN(userLat) && !isNaN(userLng)) {
-      estabelecimentos = estabelecimentos.map(est => {
+      const estabelecimentosComDistancia = estabelecimentos.map(est => {
         const distanciaKm = calculateDistance(userLat, userLng, est.latitude, est.longitude);
         return { ...est, distanciaKm };
       });
+      // Ordena pela distância
+      res.status(200).json(estabelecimentosComDistancia.sort((a, b) => a.distanciaKm - b.distanciaKm));
+    } else {
+      // Retorna a lista sem distância se as coordenadas não forem fornecidas
+      res.status(200).json(estabelecimentos);
     }
-
-    res.status(200).json(estabelecimentos.sort((a, b) => a.distanciaKm - b.distanciaKm));
   } catch (err) {
     console.error('Erro ao buscar estabelecimentos:', err.stack);
     res.status(500).json({ message: 'Erro ao buscar estabelecimentos.' });
@@ -108,6 +91,58 @@ app.post('/api/subscribe', async (req, res) => {
     res.status(500).json({ message: 'Erro ao salvar inscrição.' });
   }
 });
+
+app.post('/api/notify-all', async (req, res) => {
+    console.log('Enviando notificação para todos os inscritos...');
+
+    try {
+        // Busca todas as inscrições do banco de dados
+        const result = await pool.query('SELECT subscription_data FROM subscriptions');
+        const subscriptions = result.rows.map(row => row.subscription_data);
+
+        const notificationPayload = {
+            notification: {
+                title: 'Pão Quentinho!',
+                body: 'Uma nova fornada acabou de sair! Venha conferir!',
+                icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
+                vibrate: [100, 50, 100],
+                data: {
+                    url: 'https://gabriel-nt.github.io/pao-quentinho/' 
+                }
+            }
+        };
+
+        const promises = subscriptions.map(sub => 
+            webpush.sendNotification(sub, JSON.stringify(notificationPayload))
+        );
+
+        await Promise.all(promises);
+        res.status(200).json({ message: 'Notificações enviadas.' });
+    } catch (err) {
+        console.error("Erro ao enviar notificações", err);
+        res.sendStatus(500);
+    }
+});
+
+// Função para testar a conexão com o banco de dados com tentativas
+const connectWithRetry = async (retries = 5, delay = 5000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const client = await pool.connect();
+      console.log('✅ Conexão com o banco de dados estabelecida com sucesso.');
+      client.release(); // Libera o cliente de volta para o pool
+      return;
+    } catch (err) {
+      console.error(`❌ Erro ao conectar ao banco de dados (tentativa ${i + 1}):`, err.message);
+      if (i < retries - 1) {
+        console.log(`Tentando novamente em ${delay / 1000} segundos...`);
+        await new Promise(res => setTimeout(res, delay));
+      } else {
+        throw new Error('Não foi possível conectar ao banco de dados após várias tentativas.');
+      }
+    }
+  }
+};
 
 /**
  * Calcula a distância em KM entre duas coordenadas geográficas usando a fórmula de Haversine.
