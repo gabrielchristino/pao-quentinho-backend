@@ -25,6 +25,7 @@ const pool = new Pool({
 // Middlewares
 app.use(cors());
 app.use(bodyParser.json());
+app.use(express.json()); // Substitui o bodyParser.json()
 
 // --- Configuração das Notificações Push ---
 // As chaves são lidas das variáveis de ambiente do Railway
@@ -104,7 +105,7 @@ app.post('/api/subscribe', async (req, res) => {
 
 app.post('/api/notify/:estabelecimentoId', async (req, res) => {
     const { estabelecimentoId } = req.params;
-    const { message, title } = req.body; // Permite customizar a mensagem
+    const { message, title } = req.body || {}; // Garante que req.body não seja nulo
 
     console.log(`Enviando notificação para inscritos do estabelecimento ${estabelecimentoId}...`);
 
