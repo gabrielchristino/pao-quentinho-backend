@@ -62,6 +62,12 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 }
 
 // --- Rotas da API ---
+
+// Rota para fornecer a chave pública VAPID para o frontend
+app.get('/api/vapid-public-key', (req, res) => {
+  res.status(200).send(VAPID_PUBLIC_KEY);
+});
+
 app.get('/api/estabelecimentos', async (req, res) => {
   const userLat = parseFloat(req.query.lat);
   const userLng = parseFloat(req.query.lng);
