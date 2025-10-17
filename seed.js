@@ -6,6 +6,7 @@ const { Pool } = require('pg');
 // Dados iniciais dos estabelecimentos
 const estabelecimentosData = [
   {
+    id: 1,
     nome: 'Sacolão Campo Grande',
     tipo: 'outros',
     horarioAbertura: '07:00',
@@ -17,6 +18,7 @@ const estabelecimentosData = [
     longitude: -46.68705772329827
   },
   {
+    id: 2,
     nome: 'OXXO - Sines',
     tipo: 'mercado',
     horarioAbertura: '00:00',
@@ -28,6 +30,7 @@ const estabelecimentosData = [
     longitude: -46.68829784147591
   },
   {
+    id: 3,
     nome: 'Nova Barão Lanchonete',
     tipo: 'padaria',
     horarioAbertura: '06:00',
@@ -39,6 +42,7 @@ const estabelecimentosData = [
     longitude: -46.68660672925216
   },
   {
+    id: 4,
     nome: 'Pão de Açúcar',
     tipo: 'mercado',
     horarioAbertura: '07:00',
@@ -50,6 +54,7 @@ const estabelecimentosData = [
     longitude: -46.68941222071169
   },
   {
+    id: 5,
     nome: 'Panificadora Canaã',
     tipo: 'padaria',
     horarioAbertura: '06:00',
@@ -61,6 +66,7 @@ const estabelecimentosData = [
     longitude: -46.672676378654344
   },
   {
+    id: 6,
     nome: 'Adega Nossa Senhora Lurdes',
     tipo: 'mercado',
     horarioAbertura: '07:00',
@@ -72,6 +78,7 @@ const estabelecimentosData = [
     longitude: -46.67198067791495
   },
   {
+    id: 7,
     nome: 'Sodiê Doces São Paulo Interlagos',
     tipo: 'casaDeBolos',
     horarioAbertura: '09:00',
@@ -83,6 +90,7 @@ const estabelecimentosData = [
     longitude: -46.68581554119652
   },
   {
+    id: 8,
     nome: 'Padaria Dona Lena',
     tipo: 'padaria',
     horarioAbertura: '06:00',

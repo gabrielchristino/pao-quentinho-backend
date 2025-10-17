@@ -77,14 +77,15 @@ app.get('/api/estabelecimentos', async (req, res) => {
 });
 
 app.post('/api/subscribe', async (req, res) => {
-  const subscription = req.body;
-  console.log('POST /api/subscribe', subscription.endpoint);
+  const { subscription, estabelecimentoId } = req.body;
+  console.log(`POST /api/subscribe para o estabelecimento ${estabelecimentoId}`);
   
   // A cláusula ON CONFLICT impede a inserção de inscrições duplicadas
-  const insertQuery = 'INSERT INTO subscriptions(subscription_data) VALUES($1) ON CONFLICT (subscription_data) DO NOTHING';
+  // e atualiza o estabelecimento_id se a inscrição já existir.
+  const insertQuery = 'INSERT INTO subscriptions(subscription_data, estabelecimento_id) VALUES($1, $2) ON CONFLICT (subscription_data) DO UPDATE SET estabelecimento_id = $2';
   
   try {
-    await pool.query(insertQuery, [subscription]);
+    await pool.query(insertQuery, [subscription, estabelecimentoId]);
     res.status(201).json({ message: 'Inscrição realizada com sucesso.' });
   } catch (err) {
     console.error('Erro ao salvar inscrição:', err.stack);
@@ -92,18 +93,21 @@ app.post('/api/subscribe', async (req, res) => {
   }
 });
 
-app.post('/api/notify-all', async (req, res) => {
-    console.log('Enviando notificação para todos os inscritos...');
+app.post('/api/notify/:estabelecimentoId', async (req, res) => {
+    const { estabelecimentoId } = req.params;
+    const { message, title } = req.body; // Permite customizar a mensagem
+
+    console.log(`Enviando notificação para inscritos do estabelecimento ${estabelecimentoId}...`);
 
     try {
-        // Busca todas as inscrições do banco de dados
-        const result = await pool.query('SELECT subscription_data FROM subscriptions');
+        // Busca as inscrições para um estabelecimento específico
+        const result = await pool.query('SELECT subscription_data FROM subscriptions WHERE estabelecimento_id = $1', [estabelecimentoId]);
         const subscriptions = result.rows.map(row => row.subscription_data);
 
         const notificationPayload = {
             notification: {
-                title: 'Pão Quentinho!',
-                body: 'Uma nova fornada acabou de sair! Venha conferir!',
+                title: title || 'Pão Quentinho!',
+                body: message || 'Uma nova fornada acabou de sair! Venha conferir!',
                 icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
                 vibrate: [100, 50, 100],
                 data: {
