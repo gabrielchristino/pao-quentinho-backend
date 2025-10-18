@@ -193,13 +193,27 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
             }
         };
 
-        const promises = subscriptions.map(sub => 
+        const promises = subscriptions.map(sub =>
             webpush.sendNotification(sub, JSON.stringify(notificationPayload))
         );
 
-        await Promise.all(promises);
+        // Usamos Promise.allSettled para lidar com sucessos e falhas individualmente
+        const results = await Promise.allSettled(promises);
+
+        // Limpeza de inscrições expiradas
+        results.forEach((result, index) => {
+          if (result.status === 'rejected' && result.reason.statusCode === 410) {
+            const expiredSubscription = subscriptions[index];
+            const endpoint = expiredSubscription.endpoint;
+            console.log(`🗑️  Inscrição expirada detectada. Removendo do banco de dados: ${endpoint}`);
+            // A cláusula ON DELETE CASCADE no banco de dados cuidará de remover as entradas na tabela de junção.
+            pool.query("DELETE FROM subscriptions WHERE subscription_data->>'endpoint' = $1", [endpoint])
+              .catch(err => console.error(`❌ Erro ao remover inscrição expirada: ${err.stack}`));
+          }
+        });
+
         console.log(`✅ Notificações manuais enviadas para ${subscriptions.length} inscritos.`);
-        res.status(200).json({ message: 'Notificações enviadas.' });
+        res.status(200).json({ message: `Notificações enviadas para ${subscriptions.length} inscritos.` });
     } catch (err) {
         console.error("❌ Erro ao enviar notificações manuais:", err);
         res.status(500).json({ message: 'Erro ao enviar notificações.' });
@@ -317,8 +331,21 @@ const checkFornadasAndNotify = async () => {
 
           console.log(`[CRON] Enviando notificações para ${subscriptions.length} inscritos do estabelecimento ${est.id}...`);
 
-          const promises = subscriptions.map(sub => webpush.sendNotification(sub, JSON.stringify(notificationPayload)));
-          await Promise.all(promises);
+          const promises = subscriptions.map(sub =>
+            webpush.sendNotification(sub, JSON.stringify(notificationPayload))
+          );
+
+          const results = await Promise.allSettled(promises);
+
+          results.forEach((result, index) => {
+            if (result.status === 'rejected' && result.reason.statusCode === 410) {
+              const expiredSubscription = subscriptions[index];
+              const endpoint = expiredSubscription.endpoint;
+              console.log(`🗑️  [CRON] Inscrição expirada detectada. Removendo: ${endpoint}`);
+              pool.query("DELETE FROM subscriptions WHERE subscription_data->>'endpoint' = $1", [endpoint])
+                .catch(err => console.error(`❌ [CRON] Erro ao remover inscrição expirada: ${err.stack}`));
+            }
+          });
           console.log(`✅ Notificações enviadas para ${subscriptions.length} inscritos do estabelecimento ${est.id}.`);
         }
       }
