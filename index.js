@@ -4,7 +4,7 @@
 require('dotenv').config();
 
 // Log para depuração da variável de ambiente do banco de dados
-console.log(`DATABASE_URL status: ${process.env.DATABASE_URL ? 'Encontrada' : 'NÃO ENCONTRADA'}`);
+console.log(`[ENV] DATABASE_URL status: ${process.env.DATABASE_URL ? 'Encontrada' : 'NÃO ENCONTRADA'}`);
 
 const express = require('express');
 const webpush = require('web-push');
@@ -37,14 +37,16 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
     VAPID_PUBLIC_KEY,
     VAPID_PRIVATE_KEY
   );
+  console.log('✅ Configuração do Web Push realizada com sucesso.');
 } else {
-  console.warn("Chaves VAPID não configuradas. O envio de notificações está desabilitado.");
+  console.warn("⚠️ Chaves VAPID não configuradas. O envio de notificações está desabilitado.");
 }
 
 // --- Rotas da API ---
 
 // Rota para fornecer a chave pública VAPID para o frontend
 app.get('/api/vapid-public-key', (req, res) => {
+  console.log('➡️  GET /api/vapid-public-key');
   res.status(200).send(VAPID_PUBLIC_KEY);
 });
 
@@ -52,10 +54,11 @@ app.get('/api/estabelecimentos', async (req, res) => {
   const userLat = parseFloat(req.query.lat);
   const userLng = parseFloat(req.query.lng);
 
-  console.log(`GET /api/estabelecimentos para lat: ${userLat}, lng: ${userLng}`);
+  console.log(`➡️  GET /api/estabelecimentos para lat: ${userLat}, lng: ${userLng}`);
 
   try {
     const result = await pool.query('SELECT id, nome, tipo, latitude, longitude, details FROM estabelecimentos');
+    console.log(`[DB] Encontrados ${result.rowCount} estabelecimentos.`);
     
     // Remonta o objeto completo que o frontend espera
     let estabelecimentos = result.rows.map(row => ({
@@ -80,14 +83,14 @@ app.get('/api/estabelecimentos', async (req, res) => {
       res.status(200).json(estabelecimentos);
     }
   } catch (err) {
-    console.error('Erro ao buscar estabelecimentos:', err.stack);
+    console.error('❌ Erro ao buscar estabelecimentos:', err.stack);
     res.status(500).json({ message: 'Erro ao buscar estabelecimentos.' });
   }
 });
 
 app.post('/api/subscribe', async (req, res) => {
   const { subscription, estabelecimentoId } = req.body;
-  console.log(`POST /api/subscribe para o estabelecimento ${estabelecimentoId} com o endpoint ${subscription.endpoint}`);
+  console.log(`➡️  POST /api/subscribe para o estabelecimento ${estabelecimentoId}`);
 
   try {
     // 1. Insere a inscrição se ela não existir e retorna o ID dela.
@@ -108,7 +111,7 @@ app.post('/api/subscribe', async (req, res) => {
 
     res.status(201).json({ message: 'Inscrição realizada com sucesso.' });
   } catch (err) {
-    console.error('Erro ao salvar inscrição:', err.stack);
+    console.error('❌ Erro ao salvar inscrição:', err.stack);
     res.status(500).json({ message: 'Erro ao salvar inscrição.' });
   }
 });
@@ -117,7 +120,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
     const { estabelecimentoId } = req.params;
     const { message, title } = req.body || {}; // Garante que req.body não seja nulo
 
-    console.log(`Enviando notificação para inscritos do estabelecimento ${estabelecimentoId}...`);
+    console.log(`➡️  POST /api/notify/${estabelecimentoId} - Disparando notificação manual...`);
 
     try {
         // Busca as inscrições para um estabelecimento específico, fazendo o JOIN com a tabela de junção
@@ -129,6 +132,11 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
         `;
         const result = await pool.query(query, [estabelecimentoId]);
         const subscriptions = result.rows.map(row => row.subscription_data);
+
+        if (subscriptions.length === 0) {
+          console.log(`[NOTIFY] Nenhum inscrito encontrado para o estabelecimento ${estabelecimentoId}.`);
+          return res.status(200).json({ message: 'Nenhum inscrito encontrado para este estabelecimento.' });
+        }
 
         const notificationPayload = {
             notification: {
@@ -147,10 +155,11 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
         );
 
         await Promise.all(promises);
+        console.log(`✅ Notificações manuais enviadas para ${subscriptions.length} inscritos.`);
         res.status(200).json({ message: 'Notificações enviadas.' });
     } catch (err) {
-        console.error("Erro ao enviar notificações", err);
-        res.sendStatus(500);
+        console.error("❌ Erro ao enviar notificações manuais:", err);
+        res.status(500).json({ message: 'Erro ao enviar notificações.' });
     }
 });
 
@@ -159,7 +168,7 @@ const connectWithRetry = async (retries = 5, delay = 5000) => {
   for (let i = 0; i < retries; i++) {
     try {
       const client = await pool.connect();
-      console.log('✅ Conexão com o banco de dados estabelecida com sucesso.');
+      console.log('✅ [DB] Conexão com o banco de dados estabelecida com sucesso.');
       client.release(); // Libera o cliente de volta para o pool
       return;
     } catch (err) {
@@ -179,7 +188,7 @@ const connectWithRetry = async (retries = 5, delay = 5000) => {
  * Esta função será agendada para rodar a cada 15 minutos.
  */
 const checkFornadasAndNotify = async () => {
-  console.log('⏰ Verificando fornadas agendadas...');
+  console.log('⏰ [CRON] Verificando fornadas agendadas...');
 
   try {
     const result = await pool.query('SELECT id, nome, details FROM estabelecimentos');
@@ -216,7 +225,7 @@ const checkFornadasAndNotify = async () => {
       const notificationMinutesSinceMidnight = (fornadaHours * 60 + fornadaMinutes) - 60;
 
       // Compara se o minuto atual do dia é o minuto exato para notificar
-      if (currentMinutesSinceMidnight === notificationMinutesSinceMidnight) {
+      if (currentMinutesSinceMidnight >= notificationMinutesSinceMidnight && currentMinutesSinceMidnight < notificationMinutesSinceMidnight + 5) {
         console.log(`🔥 Hora de notificar para a fornada das ${proximaFornada} no estabelecimento ${est.id} (${est.nome})!`);
 
         // Busca as inscrições para o estabelecimento específico
@@ -250,7 +259,7 @@ const checkFornadasAndNotify = async () => {
       }
     }
   } catch (err) {
-    console.error('Erro ao verificar fornadas:', err);
+    console.error('❌ [CRON] Erro ao verificar fornadas:', err);
   }
 };
 
@@ -287,7 +296,7 @@ const startServer = async () => {
     await connectWithRetry();
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor rodando na porta ${PORT}`);
+      console.log(`🚀 Servidor iniciado e rodando na porta ${PORT}`);
 
       // Agenda a verificação de fornadas para rodar a cada 5 minutos.
       cron.schedule('*/5 * * * *', checkFornadasAndNotify, { timezone: "America/Sao_Paulo" });
