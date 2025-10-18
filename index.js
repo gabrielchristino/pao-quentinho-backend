@@ -272,81 +272,190 @@ const checkFornadasAndNotify = async () => {
     const currentMinutesSinceMidnight = (currentHours * 60) + currentMinutes;
 
     for (const est of estabelecimentos) {
-      const proximaFornada = est.details.proximaFornada;
-      // traz o horário
-      console.log(`[CRON] Estabelecimento ${est.id} (${est.nome}) - Próxima fornada: ${proximaFornada}`);
+      const fornadas = est.details.proximaFornada;
 
       // Ignora se não houver horário de fornada
-      if (!proximaFornada || proximaFornada === 'N/A') {
+      if (!fornadas || fornadas.length === 0) {
         continue;
       }
 
-      const [fornadaHours, fornadaMinutes] = proximaFornada.split(':').map(Number);
-      const fornadaTotalMinutes = (fornadaHours * 60) + fornadaMinutes;
-      console.log(`[CRON] Estabelecimento ${est.id} (${est.nome}) - Fornada às ${fornadaHours}:${fornadaMinutes} (${fornadaTotalMinutes} min do dia)`);
+      // Itera sobre cada horário de fornada cadastrado
+      for (const fornadaTime of fornadas) {
+        // Garante que estamos lidando com uma string antes de usar .split()
+        if (typeof fornadaTime === 'string') {
+          const [fornadaHours, fornadaMinutes] = fornadaTime.split(':').map(Number);
+          const fornadaTotalMinutes = (fornadaHours * 60) + fornadaMinutes;
+          console.log(`[CRON] Estabelecimento ${est.id} (${est.nome}) - Verificando fornada das ${fornadaTime} (${fornadaTotalMinutes} min do dia)`);
 
-      // Calcula os minutos desde a meia-noite para os horários de notificação
-      const notification1hBefore = fornadaTotalMinutes - 60; // 1 hora antes
-      const notification5minBefore = fornadaTotalMinutes - 5;   // 5 minutos antes
+          // Calcula os minutos desde a meia-noite para os horários de notificação
+          const notification1hBefore = fornadaTotalMinutes - 60; // 1 hora antes
+          const notification5minBefore = fornadaTotalMinutes - 5;   // 5 minutos antes
 
-      // Verifica se o minuto atual está na janela de algum dos horários de notificação
-      // A janela de 5 minutos (ex: `+ 5`) é para garantir que a notificação seja pega pelo cron que roda a cada 5 min.
-      const shouldNotify1h = currentMinutesSinceMidnight >= notification1hBefore && currentMinutesSinceMidnight < notification1hBefore + 5;
-      const shouldNotify5min = currentMinutesSinceMidnight >= notification5minBefore && currentMinutesSinceMidnight < notification5minBefore + 5;
+          // Verifica se o minuto atual está na janela de algum dos horários de notificação
+          // A janela de 5 minutos (ex: `+ 5`) é para garantir que a notificação seja pega pelo cron que roda a cada 5 min.
+          const shouldNotify1h = currentMinutesSinceMidnight >= notification1hBefore && currentMinutesSinceMidnight < notification1hBefore + 5;
+          const shouldNotify5min = currentMinutesSinceMidnight >= notification5minBefore && currentMinutesSinceMidnight < notification5minBefore + 5;
 
-      if (shouldNotify1h || shouldNotify5min) {
-        console.log(`🔥 Hora de notificar para a fornada das ${proximaFornada} no estabelecimento ${est.id} (${est.nome})!`);
-        
-        const isAlmostTime = shouldNotify5min;
+          if (shouldNotify1h || shouldNotify5min) {
+            console.log(`🔥 Hora de notificar para a fornada das ${fornadaTime} no estabelecimento ${est.id} (${est.nome})!`);
+            
+            const isAlmostTime = shouldNotify5min;
 
-        // Busca as inscrições para o estabelecimento específico
-        const subscriptionsQuery = `
-          SELECT s.subscription_data
-          FROM subscriptions s
-          JOIN establishment_subscriptions es ON s.id = es.subscription_id
-          WHERE es.estabelecimento_id = $1;
-        `;
-        const subscriptionsResult = await pool.query(subscriptionsQuery, [est.id]);
-        const subscriptions = subscriptionsResult.rows.map(row => row.subscription_data);
-        console.log(`[CRON] Encontradas ${subscriptions.length} inscrições para o estabelecimento ${est.id}.`);
+            // Busca as inscrições para o estabelecimento específico
+            const subscriptionsQuery = `
+              SELECT s.subscription_data
+              FROM subscriptions s
+              JOIN establishment_subscriptions es ON s.id = es.subscription_id
+              WHERE es.estabelecimento_id = $1;
+            `;
+            const subscriptionsResult = await pool.query(subscriptionsQuery, [est.id]);
+            const subscriptions = subscriptionsResult.rows.map(row => row.subscription_data);
+            console.log(`[CRON] Encontradas ${subscriptions.length} inscrições para o estabelecimento ${est.id}.`);
 
-        if (subscriptions.length > 0) {
-          // Seleciona uma mensagem aleatória da lista já buscada
-          const randomMessage = randomMessages.length > 0
-            ? randomMessages[Math.floor(Math.random() * randomMessages.length)].message.replace('Pão quentinho', 'Pão quentinho saindo')
-            : `Uma nova fornada sairá às ${proximaFornada}. Não perca!`;
+            if (subscriptions.length > 0) {
+              // Seleciona uma mensagem aleatória da lista já buscada
+              const randomMessage = randomMessages.length > 0
+                ? randomMessages[Math.floor(Math.random() * randomMessages.length)].message.replace('Pão quentinho', 'Pão quentinho saindo')
+                : `Uma nova fornada sairá às ${fornadaTime}. Não perca!`;
 
-          console.log(`[CRON] Mensagem selecionada para notificação: "${randomMessage}"`);
+              console.log(`[CRON] Mensagem selecionada para notificação: "${randomMessage}"`);
 
-          const notificationPayload = {
-            notification: {
-              title: isAlmostTime ? `Está saindo agora em ${est.nome}!` : `Falta 1h para a fornada em ${est.nome}!`,
-              body: randomMessage,
-              icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
-              data: {
-                url: `https://gabriel-nt.github.io/pao-quentinho/estabelecimento/${est.id}`
+              const notificationPayload = {
+                notification: {
+                  title: isAlmostTime ? `Está saindo agora em ${est.nome}!` : `Falta 1h para a fornada em ${est.nome}!`,
+                  body: randomMessage,
+                  icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
+                  data: {
+                    url: `https://gabriel-nt.github.io/pao-quentinho/estabelecimento/${est.id}`
+                  }
+                }
+              };
+
+              console.log(`[CRON] Enviando notificações para ${subscriptions.length} inscritos do estabelecimento ${est.id}...`);
+
+              const promises = subscriptions.map(sub =>
+                webpush.sendNotification(sub, JSON.stringify(notificationPayload))
+              );
+
+              const results = await Promise.allSettled(promises);
+
+              results.forEach((result, index) => {
+                if (result.status === 'rejected' && result.reason.statusCode === 410) {
+                  const expiredSubscription = subscriptions[index];
+                  const endpoint = expiredSubscription.endpoint;
+                  console.log(`🗑️  [CRON] Inscrição expirada detectada. Removendo: ${endpoint}`);
+                  pool.query("DELETE FROM subscriptions WHERE subscription_data->>'endpoint' = $1", [endpoint])
+                    .catch(err => console.error(`❌ [CRON] Erro ao remover inscrição expirada: ${err.stack}`));
+                }
+              });
+              console.log(`✅ Notificações enviadas para ${subscriptions.length} inscritos do estabelecimento ${est.id}.`);
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('❌ [CRON] Erro ao verificar fornadas:', err);
+  }
+};
+
+/**
+ * Calcula a distância em KM entre duas coordenadas geográficas usando a fórmula de Haversine.
+ */
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Raio da Terra em km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distância em km
+}
+
+/**
+ * Converte graus para radianos.
+ */
+function deg2rad(deg) {
+  return deg * (Math.PI / 180);
+}
+
+// --- Inicialização do Servidor ---
+const startServer = async () => {
+  try {
+    // Validação "Fail-Fast": Garante que variáveis essenciais existam antes de continuar.
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL não foi encontrada nas variáveis de ambiente.');
+    }
+
+    await connectWithRetry();
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor iniciado e rodando na porta ${PORT}`);
+
+      // Agenda a verificação de fornadas para rodar a cada 5 minutos.
+      cron.schedule('*/5 * * * *', checkFornadasAndNotify, { timezone: "America/Sao_Paulo" });
+    });
+  } catch (err) {
+    console.error('🔥 Falha ao iniciar o servidor:', err.message);
+    process.exit(1); // Encerra a aplicação se não conseguir conectar ao DB
+  }
+};
+
+startServer();
+          
+          const isAlmostTime = shouldNotify5min;
+
+          // Busca as inscrições para o estabelecimento específico
+          const subscriptionsQuery = `
+            SELECT s.subscription_data
+            FROM subscriptions s
+            JOIN establishment_subscriptions es ON s.id = es.subscription_id
+            WHERE es.estabelecimento_id = $1;
+          `;
+          const subscriptionsResult = await pool.query(subscriptionsQuery, [est.id]);
+          const subscriptions = subscriptionsResult.rows.map(row => row.subscription_data);
+          console.log(`[CRON] Encontradas ${subscriptions.length} inscrições para o estabelecimento ${est.id}.`);
+
+          if (subscriptions.length > 0) {
+            // Seleciona uma mensagem aleatória da lista já buscada
+            const randomMessage = randomMessages.length > 0
+              ? randomMessages[Math.floor(Math.random() * randomMessages.length)].message.replace('Pão quentinho', 'Pão quentinho saindo')
+              : `Uma nova fornada sairá às ${fornadaTime}. Não perca!`;
+
+            console.log(`[CRON] Mensagem selecionada para notificação: "${randomMessage}"`);
+
+            const notificationPayload = {
+              notification: {
+                title: isAlmostTime ? `Está saindo agora em ${est.nome}!` : `Falta 1h para a fornada em ${est.nome}!`,
+                body: randomMessage,
+                icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
+                data: {
+                  url: `https://gabriel-nt.github.io/pao-quentinho/estabelecimento/${est.id}`
+                }
               }
-            }
-          };
+            };
 
-          console.log(`[CRON] Enviando notificações para ${subscriptions.length} inscritos do estabelecimento ${est.id}...`);
+            console.log(`[CRON] Enviando notificações para ${subscriptions.length} inscritos do estabelecimento ${est.id}...`);
 
-          const promises = subscriptions.map(sub =>
-            webpush.sendNotification(sub, JSON.stringify(notificationPayload))
-          );
+            const promises = subscriptions.map(sub =>
+              webpush.sendNotification(sub, JSON.stringify(notificationPayload))
+            );
 
-          const results = await Promise.allSettled(promises);
+            const results = await Promise.allSettled(promises);
 
-          results.forEach((result, index) => {
-            if (result.status === 'rejected' && result.reason.statusCode === 410) {
-              const expiredSubscription = subscriptions[index];
-              const endpoint = expiredSubscription.endpoint;
-              console.log(`🗑️  [CRON] Inscrição expirada detectada. Removendo: ${endpoint}`);
-              pool.query("DELETE FROM subscriptions WHERE subscription_data->>'endpoint' = $1", [endpoint])
-                .catch(err => console.error(`❌ [CRON] Erro ao remover inscrição expirada: ${err.stack}`));
-            }
-          });
-          console.log(`✅ Notificações enviadas para ${subscriptions.length} inscritos do estabelecimento ${est.id}.`);
+            results.forEach((result, index) => {
+              if (result.status === 'rejected' && result.reason.statusCode === 410) {
+                const expiredSubscription = subscriptions[index];
+                const endpoint = expiredSubscription.endpoint;
+                console.log(`🗑️  [CRON] Inscrição expirada detectada. Removendo: ${endpoint}`);
+                pool.query("DELETE FROM subscriptions WHERE subscription_data->>'endpoint' = $1", [endpoint])
+                  .catch(err => console.error(`❌ [CRON] Erro ao remover inscrição expirada: ${err.stack}`));
+              }
+            });
+            console.log(`✅ Notificações enviadas para ${subscriptions.length} inscritos do estabelecimento ${est.id}.`);
+          }
         }
       }
     }
