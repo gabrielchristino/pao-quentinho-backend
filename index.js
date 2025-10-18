@@ -193,10 +193,13 @@ const checkFornadasAndNotify = async () => {
   try {
     const result = await pool.query('SELECT id, nome, details FROM estabelecimentos');
     const estabelecimentos = result.rows;
+    // traz o resultado da consulta
+    console.log(`[DB] Encontrados ${estabelecimentos.length} estabelecimentos.`);
 
     // Otimização: Busca todas as mensagens aleatórias de uma vez, fora do loop
     const messagesResult = await pool.query('SELECT message FROM notification_messages');
     const randomMessages = messagesResult.rows;
+    console.log(`[DB] Encontradas ${randomMessages.length} mensagens de notificação.`);
 
     // Obtém a hora e os minutos atuais de forma robusta no fuso horário de São Paulo.
     const now = new Date();
@@ -213,6 +216,8 @@ const checkFornadasAndNotify = async () => {
 
     for (const est of estabelecimentos) {
       const proximaFornada = est.details.proximaFornada;
+      // traz o horário
+      console.log(`[CRON] Estabelecimento ${est.id} (${est.nome}) - Próxima fornada: ${proximaFornada}`);
 
       // Ignora se não houver horário de fornada
       if (!proximaFornada || proximaFornada === 'N/A') {
@@ -220,6 +225,7 @@ const checkFornadasAndNotify = async () => {
       }
 
       const [fornadaHours, fornadaMinutes] = proximaFornada.split(':').map(Number);
+      console.log(`[CRON] Estabelecimento ${est.id} (${est.nome}) - Fornada às ${fornadaHours}:${fornadaMinutes}`);
 
       // Calcula os minutos desde a meia-noite para a hora da notificação (1h antes da fornada)
       const notificationMinutesSinceMidnight = (fornadaHours * 60 + fornadaMinutes) - 60;
@@ -237,12 +243,15 @@ const checkFornadasAndNotify = async () => {
         `;
         const subscriptionsResult = await pool.query(subscriptionsQuery, [est.id]);
         const subscriptions = subscriptionsResult.rows.map(row => row.subscription_data);
+        console.log(`[CRON] Encontradas ${subscriptions.length} inscrições para o estabelecimento ${est.id}.`);
 
         if (subscriptions.length > 0) {
           // Seleciona uma mensagem aleatória da lista já buscada
           const randomMessage = randomMessages.length > 0
             ? randomMessages[Math.floor(Math.random() * randomMessages.length)].message
             : `Uma nova fornada sairá às ${proximaFornada}. Não perca!`; // Fallback
+
+          console.log(`[CRON] Mensagem selecionada para notificação: "${randomMessage}"`);
 
           const notificationPayload = {
             notification: {
@@ -251,6 +260,8 @@ const checkFornadasAndNotify = async () => {
               icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
             }
           };
+
+          console.log(`[CRON] Enviando notificações para ${subscriptions.length} inscritos do estabelecimento ${est.id}...`);
 
           const promises = subscriptions.map(sub => webpush.sendNotification(sub, JSON.stringify(notificationPayload)));
           await Promise.all(promises);

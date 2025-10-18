@@ -11,7 +11,7 @@ const estabelecimentosData = [
     tipo: 'outros',
     horarioAbertura: '07:00',
     horarioFechamento: '21:05',
-    proximaFornada: '21:00', // Notificação às 20:00
+    proximaFornada: '22:20', // Notificação às 20:00
     endereco: { rua: 'Av. Nossa Sra. do Sabará', numero: '2001', bairro: 'Vila Santana', cidade: 'São Paulo', estado: 'SP', cep: '04685-004', complemento: '' },
     info: 'Mercado de frutas, vegetais e produtos frescos. Pães e salgados disponíveis na padaria interna.',
     latitude: -23.672309973956033,
