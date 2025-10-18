@@ -11,7 +11,7 @@ const estabelecimentosData = [
     tipo: 'outros',
     horarioAbertura: '07:00',
     horarioFechamento: '21:05',
-    proximaFornada: '22:20', // Notificação às 20:00
+    proximaFornada: '17:40', // Notificação às 20:00
     endereco: { rua: 'Av. Nossa Sra. do Sabará', numero: '2001', bairro: 'Vila Santana', cidade: 'São Paulo', estado: 'SP', cep: '04685-004', complemento: '' },
     info: 'Mercado de frutas, vegetais e produtos frescos. Pães e salgados disponíveis na padaria interna.',
     latitude: -23.672309973956033,
@@ -23,7 +23,7 @@ const estabelecimentosData = [
     tipo: 'mercado',
     horarioAbertura: '00:00',
     horarioFechamento: '23:59', // Representando 24 horas
-    proximaFornada: '21:10', // Notificação às 20:05
+    proximaFornada: '17:40', // Notificação às 20:05
     endereco: { rua: 'Av. Nossa Sra. do Sabará', numero: '1785', bairro: 'Vila Sofia', cidade: 'São Paulo', estado: 'SP', cep: '04685-004' },
     info: 'Mercado de conveniência com atendimento 24 horas. Lanches, bebidas e produtos de padaria.',
     latitude: -23.670029653701853,

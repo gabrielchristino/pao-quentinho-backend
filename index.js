@@ -138,10 +138,24 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
           return res.status(200).json({ message: 'Nenhum inscrito encontrado para este estabelecimento.' });
         }
 
+        let notificationBody = message;
+
+        // Se nenhuma mensagem foi enviada no corpo da requisição, busca uma aleatória no banco
+        if (!notificationBody) {
+          console.log('[NOTIFY] Nenhuma mensagem fornecida. Buscando mensagem aleatória no banco de dados...');
+          const messagesResult = await pool.query('SELECT message FROM notification_messages');
+          const randomMessages = messagesResult.rows;
+
+          if (randomMessages.length > 0) {
+            notificationBody = randomMessages[Math.floor(Math.random() * randomMessages.length)].message;
+            console.log(`[NOTIFY] Mensagem aleatória selecionada: "${notificationBody}"`);
+          }
+        }
+
         const notificationPayload = {
             notification: {
                 title: title || 'Pão Quentinho!',
-                body: message || 'Uma nova fornada acabou de sair! Venha conferir!',
+                body: notificationBody || 'Uma nova fornada acabou de sair! Venha conferir!', // Fallback final
                 icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
                 vibrate: [100, 50, 100],
                 data: {
@@ -225,14 +239,22 @@ const checkFornadasAndNotify = async () => {
       }
 
       const [fornadaHours, fornadaMinutes] = proximaFornada.split(':').map(Number);
-      console.log(`[CRON] Estabelecimento ${est.id} (${est.nome}) - Fornada às ${fornadaHours}:${fornadaMinutes}`);
+      const fornadaTotalMinutes = (fornadaHours * 60) + fornadaMinutes;
+      console.log(`[CRON] Estabelecimento ${est.id} (${est.nome}) - Fornada às ${fornadaHours}:${fornadaMinutes} (${fornadaTotalMinutes} min do dia)`);
 
-      // Calcula os minutos desde a meia-noite para a hora da notificação (1h antes da fornada)
-      const notificationMinutesSinceMidnight = (fornadaHours * 60 + fornadaMinutes) - 60;
+      // Calcula os minutos desde a meia-noite para os horários de notificação
+      const notification1hBefore = fornadaTotalMinutes - 60; // 1 hora antes
+      const notification5minBefore = fornadaTotalMinutes - 5;   // 5 minutos antes
 
-      // Compara se o minuto atual do dia é o minuto exato para notificar
-      if (currentMinutesSinceMidnight >= notificationMinutesSinceMidnight && currentMinutesSinceMidnight < notificationMinutesSinceMidnight + 5) {
+      // Verifica se o minuto atual está na janela de algum dos horários de notificação
+      // A janela de 5 minutos (ex: `+ 5`) é para garantir que a notificação seja pega pelo cron que roda a cada 5 min.
+      const shouldNotify1h = currentMinutesSinceMidnight >= notification1hBefore && currentMinutesSinceMidnight < notification1hBefore + 5;
+      const shouldNotify5min = currentMinutesSinceMidnight >= notification5minBefore && currentMinutesSinceMidnight < notification5minBefore + 5;
+
+      if (shouldNotify1h || shouldNotify5min) {
         console.log(`🔥 Hora de notificar para a fornada das ${proximaFornada} no estabelecimento ${est.id} (${est.nome})!`);
+        
+        const isAlmostTime = shouldNotify5min;
 
         // Busca as inscrições para o estabelecimento específico
         const subscriptionsQuery = `
@@ -248,14 +270,14 @@ const checkFornadasAndNotify = async () => {
         if (subscriptions.length > 0) {
           // Seleciona uma mensagem aleatória da lista já buscada
           const randomMessage = randomMessages.length > 0
-            ? randomMessages[Math.floor(Math.random() * randomMessages.length)].message
-            : `Uma nova fornada sairá às ${proximaFornada}. Não perca!`; // Fallback
+            ? randomMessages[Math.floor(Math.random() * randomMessages.length)].message.replace('Pão quentinho', 'Pão quentinho saindo')
+            : `Uma nova fornada sairá às ${proximaFornada}. Não perca!`;
 
           console.log(`[CRON] Mensagem selecionada para notificação: "${randomMessage}"`);
 
           const notificationPayload = {
             notification: {
-              title: `Está quase na hora em ${est.nome}!`,
+              title: isAlmostTime ? `Está saindo agora em ${est.nome}!` : `Falta 1h para a fornada em ${est.nome}!`,
               body: randomMessage,
               icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
             }
