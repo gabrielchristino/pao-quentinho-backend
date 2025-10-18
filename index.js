@@ -189,13 +189,18 @@ const checkFornadasAndNotify = async () => {
     const messagesResult = await pool.query('SELECT message FROM notification_messages');
     const randomMessages = messagesResult.rows;
 
-    // Obtém a hora atual especificamente no fuso horário de São Paulo para evitar erros de UTC no servidor.
-    const nowInSaoPaulo = new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
-    const now = new Date(nowInSaoPaulo);
+    // Obtém a hora e os minutos atuais de forma robusta no fuso horário de São Paulo.
+    const now = new Date();
+    const timeParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(now);
 
-    const currentHours = now.getHours();
-    const currentMinutes = now.getMinutes();
-    const currentMinutesSinceMidnight = currentHours * 60 + currentMinutes;
+    const currentHours = parseInt(timeParts.find(p => p.type === 'hour').value, 10);
+    const currentMinutes = parseInt(timeParts.find(p => p.type === 'minute').value, 10);
+    const currentMinutesSinceMidnight = (currentHours * 60) + currentMinutes;
 
     for (const est of estabelecimentos) {
       const proximaFornada = est.details.proximaFornada;
