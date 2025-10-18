@@ -88,6 +88,35 @@ app.get('/api/estabelecimentos', async (req, res) => {
   }
 });
 
+app.get('/api/estabelecimentos/:id', async (req, res) => {
+  const { id } = req.params;
+  console.log(`➡️  GET /api/estabelecimentos/${id}`);
+
+  try {
+    const result = await pool.query('SELECT id, nome, tipo, latitude, longitude, details FROM estabelecimentos WHERE id = $1', [id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Estabelecimento não encontrado.' });
+    }
+
+    const row = result.rows[0];
+    // Remonta o objeto completo que o frontend espera
+    const estabelecimento = {
+      id: row.id,
+      nome: row.nome,
+      tipo: row.tipo,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      ...row.details
+    };
+
+    res.status(200).json(estabelecimento);
+  } catch (err) {
+    console.error(`❌ Erro ao buscar o estabelecimento ${id}:`, err.stack);
+    res.status(500).json({ message: 'Erro ao buscar o estabelecimento.' });
+  }
+});
+
 app.post('/api/subscribe', async (req, res) => {
   const { subscription, estabelecimentoId } = req.body;
   console.log(`➡️  POST /api/subscribe para o estabelecimento ${estabelecimentoId}`);
@@ -159,7 +188,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                 icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
                 vibrate: [100, 50, 100],
                 data: {
-                    url: 'https://gabriel-nt.github.io/pao-quentinho/' 
+                    url: `https://gabriel-nt.github.io/pao-quentinho/estabelecimento/${estabelecimentoId}` 
                 }
             }
         };
@@ -280,6 +309,9 @@ const checkFornadasAndNotify = async () => {
               title: isAlmostTime ? `Está saindo agora em ${est.nome}!` : `Falta 1h para a fornada em ${est.nome}!`,
               body: randomMessage,
               icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
+              data: {
+                url: `https://gabriel-nt.github.io/pao-quentinho/estabelecimento/${est.id}`
+              }
             }
           };
 
