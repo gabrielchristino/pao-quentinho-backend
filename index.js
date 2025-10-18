@@ -198,8 +198,8 @@ const checkFornadasAndNotify = async () => {
       hour12: false
     }).formatToParts(now);
 
-    const currentHours = parseInt(timeParts.find(p => p.type === 'hour').value, 10);
-    const currentMinutes = parseInt(timeParts.find(p => p.type === 'minute').value, 10);
+    const currentHours = parseInt(timeParts.find(p => p.type === 'hour')?.value || '0', 10);
+    const currentMinutes = parseInt(timeParts.find(p => p.type === 'minute')?.value || '0', 10);
     const currentMinutesSinceMidnight = (currentHours * 60) + currentMinutes;
 
     for (const est of estabelecimentos) {
