@@ -186,9 +186,15 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                 title: title || 'Pão Quentinho!',
                 body: notificationBody || 'Uma nova fornada acabou de sair! Venha conferir!', // Fallback final
                 icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
-                vibrate: [100, 50, 100],
+                // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
+                // saber como agir quando a notificação é clicada com o app fechado.
                 data: {
-                    url: `https://gabriel-nt.github.io/pao-quentinho/estabelecimento/${estabelecimentoId}` 
+                  onActionClick: {
+                    default: {
+                      operation: 'navigateLastFocusedOrOpen',
+                      url: `/estabelecimento/${estabelecimentoId}`
+                    }
+                  }
                 }
             }
         };
@@ -325,8 +331,11 @@ const checkFornadasAndNotify = async () => {
                   title: isAlmostTime ? `Está saindo agora em ${est.nome}!` : `Falta 1h para a fornada em ${est.nome}!`,
                   body: randomMessage,
                   icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
+                  // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                   data: {
-                    url: `https://gabriel-nt.github.io/pao-quentinho/estabelecimento/${est.id}`
+                    onActionClick: {
+                      default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}` }
+                    }
                   }
                 }
               };
