@@ -175,6 +175,33 @@ app.post('/api/estabelecimentos', authRequired, async (req, res) => {
 });
 
 
+// --- ROTAS DE USUÁRIO LOGADO ---
+
+// Rota para buscar os estabelecimentos de um usuário logado
+app.get('/api/users/me/estabelecimentos', authRequired, async (req, res) => {
+  const userId = req.user.userId;
+  console.log(`➡️  GET /api/users/me/estabelecimentos para o usuário ${userId}`);
+
+  try {
+    const result = await pool.query('SELECT id, nome, tipo, latitude, longitude, details FROM estabelecimentos WHERE user_id = $1 ORDER BY id DESC', [userId]);
+
+    // Remonta o objeto completo que o frontend espera
+    const estabelecimentos = result.rows.map(row => ({
+      id: row.id,
+      nome: row.nome,
+      tipo: row.tipo,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      ...row.details
+    }));
+
+    res.status(200).json(estabelecimentos);
+  } catch (err) {
+    console.error(`❌ Erro ao buscar estabelecimentos do usuário ${userId}:`, err.stack);
+    res.status(500).json({ message: 'Erro ao buscar seus estabelecimentos.' });
+  }
+});
+
 // --- ROTAS DE AUTENTICAÇÃO ---
 
 app.post('/api/auth/register', async (req, res) => {
