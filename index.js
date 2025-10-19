@@ -178,9 +178,9 @@ app.post('/api/estabelecimentos', authRequired, async (req, res) => {
 // --- ROTAS DE AUTENTICAÇÃO ---
 
 app.post('/api/auth/register', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email e senha são obrigatórios.' });
+  const { email, password, name } = req.body;
+  if (!email || !password || !name) {
+    return res.status(400).json({ message: 'Nome, email e senha são obrigatórios.' });
   }
 
   try {
@@ -189,8 +189,8 @@ app.post('/api/auth/register', async (req, res) => {
     const password_hash = await bcrypt.hash(password, salt);
 
     const result = await pool.query(
-      'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email',
-      [email, password_hash]
+      'INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, name',
+      [email, name, password_hash]
     );
 
     res.status(201).json(result.rows[0]);
@@ -225,7 +225,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // Gera o token JWT
-    const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ token });
 
