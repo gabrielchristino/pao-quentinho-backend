@@ -117,6 +117,43 @@ app.get('/api/estabelecimentos/:id', async (req, res) => {
   }
 });
 
+app.post('/api/estabelecimentos', async (req, res) => {
+  console.log('➡️  POST /api/estabelecimentos - Criando novo estabelecimento...');
+  const { nome, tipo, latitude, longitude, details } = req.body;
+
+  // Validação básica dos dados recebidos
+  if (!nome || !tipo || !latitude || !longitude || !details) {
+    return res.status(400).json({ message: 'Dados incompletos para o cadastro.' });
+  }
+
+  try {
+    const insertQuery = `
+      INSERT INTO estabelecimentos (nome, tipo, latitude, longitude, details)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *;
+    `;
+
+    const result = await pool.query(insertQuery, [nome, tipo, latitude, longitude, details]);
+    const novoEstabelecimento = result.rows[0];
+
+    // Remonta o objeto para a resposta, similar ao GET
+    const responseEstabelecimento = {
+      id: novoEstabelecimento.id,
+      nome: novoEstabelecimento.nome,
+      tipo: novoEstabelecimento.tipo,
+      latitude: novoEstabelecimento.latitude,
+      longitude: novoEstabelecimento.longitude,
+      ...novoEstabelecimento.details
+    };
+
+    console.log(`✅ Estabelecimento "${nome}" (ID: ${novoEstabelecimento.id}) criado com sucesso.`);
+    res.status(201).json(responseEstabelecimento);
+  } catch (err) {
+    console.error('❌ Erro ao criar novo estabelecimento:', err.stack);
+    res.status(500).json({ message: 'Erro ao salvar o estabelecimento no banco de dados.' });
+  }
+});
+
 app.post('/api/subscribe', async (req, res) => {
   const { subscription, estabelecimentoId } = req.body;
   console.log(`➡️  POST /api/subscribe para o estabelecimento ${estabelecimentoId}`);
