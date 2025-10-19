@@ -147,6 +147,11 @@ async function seedDatabase() {
       );
     `);
 
+    // --- Garante que a coluna 'name' exista na tabela 'users' ---
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255);
+    `);
+
     // --- Garante que a coluna user_id exista na tabela subscriptions ---
     // O IF NOT EXISTS previne erros se o script for rodado múltiplas vezes.
     await client.query(`
