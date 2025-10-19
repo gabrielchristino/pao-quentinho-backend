@@ -185,7 +185,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
             notification: {
                 title: title || 'Pão Quentinho!',
                 body: notificationBody || 'Uma nova fornada acabou de sair! Venha conferir!', // Fallback final
-                icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
+                icon: 'assets/icons/icon-192x192.png',
                 // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                 // saber como agir quando a notificação é clicada com o app fechado.
                 data: {
@@ -330,7 +330,7 @@ const checkFornadasAndNotify = async () => {
                 notification: {
                   title: isAlmostTime ? `Está saindo agora em ${est.nome}!` : `Falta 1h para a fornada em ${est.nome}!`,
                   body: randomMessage,
-                  icon: 'https://gabriel-nt.github.io/pao-quentinho/assets/icons/icon-192x192.png',
+                  icon: 'assets/icons/icon-192x192.png',
                   // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                   data: {
                     onActionClick: {
