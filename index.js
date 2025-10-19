@@ -119,23 +119,41 @@ app.get('/api/estabelecimentos/:id', async (req, res) => {
   }
 });
 
-app.post('/api/estabelecimentos', async (req, res) => {
+// Middleware para rotas que exigem autenticação
+const authRequired = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) {
+    return res.status(401).json({ message: 'Token de autenticação não fornecido.' });
+  }
+  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ message: 'Token mal formatado.' });
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Token inválido ou expirado.' });
+  }
+};
+
+app.post('/api/estabelecimentos', authRequired, async (req, res) => {
   console.log('➡️  POST /api/estabelecimentos - Criando novo estabelecimento...');
   const { nome, tipo, latitude, longitude, details } = req.body;
+  const userId = req.user.userId; // Pega o ID do usuário logado (do token)
 
   // Validação básica dos dados recebidos
   if (!nome || !tipo || !latitude || !longitude || !details) {
     return res.status(400).json({ message: 'Dados incompletos para o cadastro.' });
   }
-
   try {
     const insertQuery = `
-      INSERT INTO estabelecimentos (nome, tipo, latitude, longitude, details) 
-      VALUES ($1, $2, $3, $4, $5) 
+      INSERT INTO estabelecimentos (nome, tipo, latitude, longitude, details, user_id) 
+      VALUES ($1, $2, $3, $4, $5, $6) 
       RETURNING *;
     `;
-
-    const result = await pool.query(insertQuery, [nome, tipo, latitude, longitude, details]);
+    const result = await pool.query(insertQuery, [nome, tipo, latitude, longitude, details, userId]);
     const novoEstabelecimento = result.rows[0];
 
     // Remonta o objeto para a resposta, similar ao GET

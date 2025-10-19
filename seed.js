@@ -152,6 +152,11 @@ async function seedDatabase() {
       ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
     `);
 
+    // --- Garante que a coluna user_id exista na tabela estabelecimentos ---
+    await client.query(`
+      ALTER TABLE estabelecimentos ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+    `);
+
     // Limpa a tabela antes de inserir novos dados para evitar duplicatas
     console.log('Limpando a tabela "estabelecimentos"...');
     await client.query('TRUNCATE TABLE estabelecimentos RESTART IDENTITY CASCADE');
