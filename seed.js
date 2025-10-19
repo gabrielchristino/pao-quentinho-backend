@@ -167,6 +167,15 @@ async function seedDatabase() {
       await client.query(insertQuery, [id, nome, tipo, latitude, longitude, details]);
     }
 
+    // --- Sincroniza a sequência de IDs ---
+    // Busca o maior ID inserido manualmente
+    const maxIdResult = await client.query('SELECT MAX(id) FROM estabelecimentos');
+    const maxId = maxIdResult.rows[0].max || 0;
+
+    // Atualiza o contador da sequência para o próximo valor disponível
+    console.log(`Sincronizando a sequência de IDs para começar após ${maxId}...`);
+    await client.query(`SELECT setval(pg_get_serial_sequence('estabelecimentos', 'id'), ${maxId})`);
+
     console.log('✅ Seed concluído com sucesso!');
   } catch (err) {
     console.error('❌ Erro durante o processo de seed:', err.stack);
