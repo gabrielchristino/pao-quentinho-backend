@@ -11,6 +11,8 @@ const webpush = require('web-push');
 const cors = require('cors');
 const cron = require('node-cron');
 const { Pool } = require('pg'); // Importa o driver do PostgreSQL
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 
@@ -128,8 +130,8 @@ app.post('/api/estabelecimentos', async (req, res) => {
 
   try {
     const insertQuery = `
-      INSERT INTO estabelecimentos (nome, tipo, latitude, longitude, details)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO estabelecimentos (nome, tipo, latitude, longitude, details) 
+      VALUES ($1, $2, $3, $4, $5) 
       RETURNING *;
     `;
 
@@ -154,18 +156,106 @@ app.post('/api/estabelecimentos', async (req, res) => {
   }
 });
 
-app.post('/api/subscribe', async (req, res) => {
+
+// --- ROTAS DE AUTENTICAÇÃO ---
+
+app.post('/api/auth/register', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email e senha são obrigatórios.' });
+  }
+
+  try {
+    // Criptografa a senha
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+
+    const result = await pool.query(
+      'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email',
+      [email, password_hash]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    // Código '23505' é erro de violação de unicidade no PostgreSQL
+    if (err.code === '23505') {
+      return res.status(409).json({ message: 'Este email já está em uso.' });
+    }
+    console.error('❌ Erro no registro:', err.stack);
+    res.status(500).json({ message: 'Erro ao registrar usuário.' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email e senha são obrigatórios.' });
+  }
+
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(401).json({ message: 'Credenciais inválidas.' }); // Usuário não encontrado
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Credenciais inválidas.' }); // Senha incorreta
+    }
+
+    // Gera o token JWT
+    const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({ token });
+
+  } catch (err) {
+    console.error('❌ Erro no login:', err.stack);
+    res.status(500).json({ message: 'Erro interno do servidor.' });
+  }
+});
+
+// --- Middleware para autenticação opcional ---
+// Este middleware verifica se há um token, decodifica-o e anexa o usuário à requisição (req.user).
+// Se não houver token, ele simplesmente continua, permitindo o acesso anônimo.
+const optionalAuth = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) {
+    return next(); // Nenhum token, continua como anônimo
+  }
+
+  const token = authHeader.split(' ')[1]; // Formato "Bearer TOKEN"
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded; // Anexa os dados do usuário (ex: { userId: 1, email: '...' })
+  } catch (err) {
+    // Token inválido ou expirado, ignora e continua como anônimo
+    console.warn('Token inválido recebido:', err.message);
+  }
+  next();
+};
+
+
+app.post('/api/subscribe', optionalAuth, async (req, res) => {
   const { subscription, estabelecimentoId } = req.body;
-  console.log(`➡️  POST /api/subscribe para o estabelecimento ${estabelecimentoId}`);
+  const userId = req.user?.userId || null; // Pega o ID do usuário do middleware, ou null se for anônimo
+
+  console.log(`➡️  POST /api/subscribe para o estabelecimento ${estabelecimentoId} (Usuário: ${userId || 'Anônimo'})`);
 
   try {
     // 1. Insere a inscrição se ela não existir e retorna o ID dela.
     const upsertSubscriptionQuery = `
-      INSERT INTO subscriptions (subscription_data) VALUES ($1)
+      INSERT INTO subscriptions (subscription_data, user_id) VALUES ($1, $2)
       ON CONFLICT (subscription_data) DO UPDATE SET subscription_data = EXCLUDED.subscription_data
       RETURNING id;
     `;
-    const subResult = await pool.query(upsertSubscriptionQuery, [subscription]);
+    const subResult = await pool.query(upsertSubscriptionQuery, [subscription, userId]);
     const subscriptionId = subResult.rows[0].id;
 
     // 2. Cria a ligação entre a inscrição e o estabelecimento.

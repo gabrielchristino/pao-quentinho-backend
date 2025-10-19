@@ -136,6 +136,22 @@ async function seedDatabase() {
   try {
     console.log('Iniciando o processo de seed...');
 
+    // --- Cria a tabela de usuários se ela não existir ---
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // --- Garante que a coluna user_id exista na tabela subscriptions ---
+    // O IF NOT EXISTS previne erros se o script for rodado múltiplas vezes.
+    await client.query(`
+      ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    `);
+
     // Limpa a tabela antes de inserir novos dados para evitar duplicatas
     console.log('Limpando a tabela "estabelecimentos"...');
     await client.query('TRUNCATE TABLE estabelecimentos RESTART IDENTITY CASCADE');
