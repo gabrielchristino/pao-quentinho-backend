@@ -158,8 +158,12 @@ async function seedDatabase() {
       ALTER TABLE estabelecimentos ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
     `);
 
-    // Limpa a tabela antes de inserir novos dados para evitar duplicatas
-    console.log('Limpando a tabela "estabelecimentos"...');
+    // Limpa todas as tabelas relevantes antes de inserir novos dados para evitar duplicatas
+    console.log('Limpando todas as tabelas...');
+    // A ordem é importante por causa das chaves estrangeiras.
+    // TRUNCATE limpa as tabelas e RESTART IDENTITY reinicia os contadores de ID.
+    await client.query('TRUNCATE TABLE users RESTART IDENTITY CASCADE');
+    await client.query('TRUNCATE TABLE subscriptions RESTART IDENTITY CASCADE');
     await client.query('TRUNCATE TABLE estabelecimentos RESTART IDENTITY CASCADE');
 
     // --- Seed da tabela de mensagens de notificação ---
