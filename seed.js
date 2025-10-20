@@ -179,9 +179,14 @@ async function seedDatabase() {
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, -- Se o usuário for deletado, suas inscrições também são
         subscription_data JSONB NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE ((subscription_data->>'endpoint')) -- Garante que cada dispositivo seja único
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // Cria um índice único na expressão para garantir que cada endpoint de dispositivo seja único.
+    // Isso é feito separadamente porque a sintaxe de índice de expressão não é permitida inline no CREATE TABLE.
+    await client.query(`
+      CREATE UNIQUE INDEX subscriptions_endpoint_unique_idx ON subscriptions ((subscription_data->>'endpoint'));
     `);
 
     await client.query(`
