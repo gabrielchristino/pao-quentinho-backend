@@ -58,81 +58,142 @@ O servidor estará rodando em `http://localhost:3000` (ou na porta definida pela
 
 ## API Endpoints
 
-A seguir estão detalhadas as rotas disponíveis na API.
+A API é dividida em seções: rotas públicas, de autenticação e rotas que exigem autenticação.
 
-### 1. Obter a Chave Pública VAPID
+### Rotas Públicas
 
-Fornece a chave pública VAPID necessária para o frontend se inscrever nas notificações push.
+Estas rotas podem ser acessadas sem autenticação.
 
+#### 1. Obter Chave Pública VAPID
 - **Método**: `GET`
 - **URL**: `/api/vapid-public-key`
-- **Exemplo com `curl`**:
-  ```bash
-  curl https://pao-quentinho-backend-production.up.railway.app/api/vapid-public-key
-  ```
+- **Descrição**: Retorna a chave pública VAPID necessária para o frontend se inscrever nas notificações push.
 
-### 2. Listar Estabelecimentos
-
-Retorna uma lista de todos os estabelecimentos. Se as coordenadas de geolocalização (`lat`, `lng`) forem fornecidas como query parameters, a lista será ordenada pelo mais próximo.
-
+#### 2. Listar Estabelecimentos
 - **Método**: `GET`
 - **URL**: `/api/estabelecimentos`
-- **Query Parameters (Opcionais)**:
-  - `lat`: Latitude do usuário.
-  - `lng`: Longitude do usuário.
-- **Exemplo (sem geolocalização)**:
-  ```bash
-  curl https://pao-quentinho-backend-production.up.railway.app/api/estabelecimentos
-  ```
-- **Exemplo (com geolocalização)**:
-  ```bash
-  curl "https://pao-quentinho-backend-production.up.railway.app/api/estabelecimentos?lat=-23.672&lng=-46.687"
-  ```
+- **Descrição**: Retorna uma lista de todos os estabelecimentos. Se as coordenadas `lat` e `lng` forem fornecidas, a lista é ordenada por proximidade.
+- **Query (Opcional)**: `lat`, `lng`
 
-### 3. Inscrever-se para Notificações
+#### 3. Obter Detalhes de um Estabelecimento
+- **Método**: `GET`
+- **URL**: `/api/estabelecimentos/:id`
+- **Descrição**: Retorna os detalhes de um único estabelecimento pelo seu ID.
 
-Registra um usuário para receber notificações de um estabelecimento específico.
-
+#### 4. Inscrever-se para Notificações
 - **Método**: `POST`
 - **URL**: `/api/subscribe`
-- **Corpo da Requisição (JSON)**:
+- **Descrição**: Registra um dispositivo para receber notificações de um estabelecimento. Se um token de autenticação for enviado, a inscrição é associada ao usuário.
+- **Corpo (JSON)**:
   ```json
   {
-    "subscription": { "...objeto PushSubscription do navegador..." },
+    "subscription": { "...objeto PushSubscription..." },
     "estabelecimentoId": 1
   }
   ```
-- **Exemplo com `curl`**:
-  ```bash
-  curl -X POST \
-    -H "Content-Type: application/json" \
-    -d '{"subscription": { "endpoint": "...", "keys": { "p256dh": "...", "auth": "..." } }, "estabelecimentoId": 1}' \
-    https://pao-quentinho-backend-production.up.railway.app/api/subscribe
-  ```
 
-### 4. Enviar Notificação Manual
-
-Dispara uma notificação para todos os usuários inscritos em um determinado estabelecimento. É possível enviar uma mensagem e título personalizados; caso contrário, uma mensagem aleatória do banco de dados será usada.
-
+#### 5. Enviar Notificação Manual
 - **Método**: `POST`
 - **URL**: `/api/notify/:estabelecimentoId`
-- **Parâmetro da URL**:
-  - `estabelecimentoId`: O ID do estabelecimento.
-- **Corpo da Requisição (JSON, Opcional)**:
+- **Descrição**: Dispara uma notificação para todos os inscritos de um estabelecimento. Pode receber um título e mensagem personalizados.
+- **Corpo (JSON, Opcional)**:
   ```json
   {
-    "title": "Título Personalizado",
-    "message": "Mensagem personalizada da notificação."
+    "title": "Fornada Especial!",
+    "message": "Pão de queijo quentinho saindo agora!"
   }
   ```
-- **Exemplo (com mensagem personalizada)**:
-  ```bash
-  curl -X POST \
-    -H "Content-Type: application/json" \
-    -d '{"title": "Fornada Especial!", "message": "Pão de queijo quentinho saindo agora!"}' \
-    https://pao-quentinho-backend-production.up.railway.app/api/notify/5
+
+---
+
+### Rotas de Autenticação
+
+Rotas para criar e autenticar usuários.
+
+#### 6. Registrar um Novo Usuário
+- **Método**: `POST`
+- **URL**: `/api/auth/register`
+- **Corpo (JSON)**:
+  ```json
+  {
+    "name": "Nome do Usuário",
+    "email": "usuario@exemplo.com",
+    "password": "senha_forte_123"
+  }
   ```
-- **Exemplo (com mensagem aleatória padrão)**:
-  ```bash
-  curl -X POST https://pao-quentinho-backend-production.up.railway.app/api/notify/5
+
+#### 7. Realizar Login
+- **Método**: `POST`
+- **URL**: `/api/auth/login`
+- **Descrição**: Autentica um usuário e retorna um token JWT.
+- **Corpo (JSON)**:
+  ```json
+  {
+    "email": "usuario@exemplo.com",
+    "password": "senha_forte_123"
+  }
   ```
+- **Resposta (JSON)**:
+  ```json
+  {
+    "token": "seu_token_jwt_aqui"
+  }
+  ```
+
+---
+
+### Rotas Autenticadas
+
+As rotas a seguir exigem um token JWT válido no cabeçalho `Authorization: Bearer <seu_token>`.
+
+#### 8. Sincronizar Inscrições
+- **Método**: `POST`
+- **URL**: `/api/auth/sync`
+- **Descrição**: Associa inscrições anônimas ao usuário logado e retorna a lista de estabelecimentos que ele já segue em outros dispositivos.
+- **Corpo (JSON)**:
+  ```json
+  {
+    "anonymousEndpoints": [
+      "https://fcm.googleapis.com/fcm/send/endpoint_anonimo_1"
+    ]
+  }
+  ```
+- **Resposta (JSON)**:
+  ```json
+  {
+    "syncedEstablishmentIds": [1, 5, 12]
+  }
+  ```
+
+#### 9. Listar Meus Estabelecimentos
+- **Método**: `GET`
+- **URL**: `/api/users/me/estabelecimentos`
+- **Descrição**: Retorna a lista de estabelecimentos que pertencem ao usuário logado.
+
+#### 10. Criar um Novo Estabelecimento
+- **Método**: `POST`
+- **URL**: `/api/estabelecimentos`
+- **Descrição**: Cria um novo estabelecimento associado ao usuário logado.
+- **Corpo (JSON)**:
+  ```json
+  {
+    "nome": "Padaria Nova",
+    "tipo": "padaria",
+    "latitude": -23.123,
+    "longitude": -46.456,
+    "details": { "horarioAbertura": "06:00", "horarioFechamento": "22:00", "proximaFornada": ["17:00"] }
+  }
+  ```
+
+#### 11. Atualizar um Estabelecimento
+- **Método**: `PUT`
+- **URL**: `/api/estabelecimentos/:id`
+- **Descrição**: Atualiza os dados de um estabelecimento que pertence ao usuário logado.
+- **Corpo (JSON)**: Deve conter todos os campos do estabelecimento.
+
+#### 12. Excluir um Estabelecimento
+- **Método**: `DELETE`
+- **URL**: `/api/estabelecimentos/:id`
+- **Descrição**: Exclui um estabelecimento que pertence ao usuário logado.
+
+---

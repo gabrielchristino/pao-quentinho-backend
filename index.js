@@ -174,6 +174,72 @@ app.post('/api/estabelecimentos', authRequired, async (req, res) => {
   }
 });
 
+app.put('/api/estabelecimentos/:id', authRequired, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+  const { nome, tipo, latitude, longitude, details } = req.body;
+
+  console.log(`➡️  PUT /api/estabelecimentos/${id} para o usuário ${userId}`);
+
+  if (!nome || !tipo || !latitude || !longitude || !details) {
+    return res.status(400).json({ message: 'Dados incompletos para a atualização.' });
+  }
+
+  try {
+    const updateQuery = `
+      UPDATE estabelecimentos
+      SET nome = $1, tipo = $2, latitude = $3, longitude = $4, details = $5
+      WHERE id = $6 AND user_id = $7
+      RETURNING *;
+    `;
+    const result = await pool.query(updateQuery, [nome, tipo, latitude, longitude, details, id, userId]);
+
+    if (result.rowCount === 0) {
+      // Isso pode significar que o estabelecimento não existe ou não pertence ao usuário.
+      // Por segurança, retornamos 404 em ambos os casos para não vazar informações.
+      return res.status(404).json({ message: 'Estabelecimento não encontrado ou você não tem permissão para editá-lo.' });
+    }
+
+    const updatedEstabelecimento = result.rows[0];
+
+    // Remonta o objeto para a resposta
+    const responseEstabelecimento = {
+      id: updatedEstabelecimento.id,
+      nome: updatedEstabelecimento.nome,
+      tipo: updatedEstabelecimento.tipo,
+      latitude: updatedEstabelecimento.latitude,
+      longitude: updatedEstabelecimento.longitude,
+      ...updatedEstabelecimento.details
+    };
+
+    console.log(`✅ Estabelecimento ID ${id} atualizado com sucesso.`);
+    res.status(200).json(responseEstabelecimento);
+  } catch (err) {
+    console.error(`❌ Erro ao atualizar o estabelecimento ${id}:`, err.stack);
+    res.status(500).json({ message: 'Erro ao atualizar o estabelecimento.' });
+  }
+});
+
+app.delete('/api/estabelecimentos/:id', authRequired, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+
+  console.log(`➡️  DELETE /api/estabelecimentos/${id} pelo usuário ${userId}`);
+
+  try {
+    const result = await pool.query('DELETE FROM estabelecimentos WHERE id = $1 AND user_id = $2', [id, userId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Estabelecimento não encontrado ou você não tem permissão para excluí-lo.' });
+    }
+
+    console.log(`✅ Estabelecimento ID ${id} excluído com sucesso.`);
+    res.status(204).send(); // 204 No Content é a resposta padrão para exclusões bem-sucedidas.
+  } catch (err) {
+    console.error(`❌ Erro ao excluir o estabelecimento ${id}:`, err.stack);
+    res.status(500).json({ message: 'Erro ao excluir o estabelecimento.' });
+  }
+});
 
 // --- ROTAS DE USUÁRIO LOGADO ---
 
