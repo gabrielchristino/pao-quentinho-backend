@@ -22,6 +22,7 @@ function generateTestTime(offsetMinutes = 0) {
 }
 
 const { Pool } = require('pg');
+const bcrypt = require('bcryptjs');
 
 // Dados iniciais dos estabelecimentos
 const estabelecimentosData = [
@@ -217,16 +218,31 @@ async function seedDatabase() {
       await client.query('INSERT INTO notification_messages (message) VALUES ($1)', [msg]);
     }
 
+    console.log('Criando usuário de teste...');
+    const testUserEmail = 'gabriel.christino@gmail.com';
+    const testUserPassword = '123';
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(testUserPassword, salt);
+
+    const userResult = await client.query(
+      'INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id',
+      [testUserEmail, 'Usuário Teste', passwordHash]
+    );
+    const testUserId = userResult.rows[0].id;
+    console.log(`Usuário de teste criado com ID: ${testUserId}. (Email: ${testUserEmail}, Senha: ${testUserPassword})`);
+
+
     console.log('Populando a tabela "estabelecimentos"...');
     for (const est of estabelecimentosData) {
       // Separa os campos principais dos detalhes para inserção nas colunas corretas
       const { id, nome, tipo, latitude, longitude, ...details } = est;
       
       const insertQuery = `
-        INSERT INTO estabelecimentos (id, nome, tipo, latitude, longitude, details)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO estabelecimentos (id, nome, tipo, latitude, longitude, details, user_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
       `;
-      await client.query(insertQuery, [id, nome, tipo, latitude, longitude, details]);
+      // Associa todos os estabelecimentos de teste ao usuário de teste
+      await client.query(insertQuery, [id, nome, tipo, latitude, longitude, details, testUserId]);
     }
 
     // --- 3. Sincronização da Sequência de IDs ---
