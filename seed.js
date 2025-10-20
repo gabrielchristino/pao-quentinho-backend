@@ -223,7 +223,7 @@ async function seedDatabase() {
 
     console.log('Criando usuário de teste...');
     const testUserEmail = 'gabriel.christino@gmail.com';
-    const testUserPassword = '123';
+    const testUserPassword = '123456';
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(testUserPassword, salt);
 
