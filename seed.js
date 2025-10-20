@@ -136,42 +136,70 @@ async function seedDatabase() {
   try {
     console.log('Iniciando o processo de seed...');
 
-    // --- Cria a tabela de usuários se ela não existir ---
+    // --- 1. Apaga e Recria as Tabelas ---
+    // Usar DROP e CREATE garante um ambiente limpo a cada execução.
+
+    console.log('Apagando tabelas antigas (se existirem)...');
+    // A ordem de DROP é a inversa da criação para respeitar as dependências.
+    // O CASCADE cuida de remover as dependências automaticamente.
     await client.query(`
-      CREATE TABLE IF NOT EXISTS users (
+      DROP TABLE IF EXISTS establishment_subscriptions;
+      DROP TABLE IF EXISTS subscriptions;
+      DROP TABLE IF EXISTS estabelecimentos;
+      DROP TABLE IF EXISTS users;
+      DROP TABLE IF EXISTS notification_messages;
+    `);
+
+    console.log('Criando novas tabelas...');
+    await client.query(`
+      CREATE TABLE users (
         id SERIAL PRIMARY KEY,
         email VARCHAR(255) UNIQUE NOT NULL,
         name VARCHAR(255) NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    // --- Garante que a coluna 'name' exista na tabela 'users' ---
     await client.query(`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255);
+      CREATE TABLE estabelecimentos (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        tipo VARCHAR(100),
+        latitude DOUBLE PRECISION,
+        longitude DOUBLE PRECISION,
+        details JSONB,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL, -- Um estabelecimento pode não ter dono
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
-    // --- Garante que a coluna user_id exista na tabela subscriptions ---
-    // O IF NOT EXISTS previne erros se o script for rodado múltiplas vezes.
     await client.query(`
-      ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+      CREATE TABLE subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, -- Se o usuário for deletado, suas inscrições também são
+        subscription_data JSONB NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE ((subscription_data->>'endpoint')) -- Garante que cada dispositivo seja único
+      );
     `);
 
-    // --- Garante que a coluna user_id exista na tabela estabelecimentos ---
     await client.query(`
-      ALTER TABLE estabelecimentos ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+      CREATE TABLE establishment_subscriptions (
+        subscription_id INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+        estabelecimento_id INTEGER NOT NULL REFERENCES estabelecimentos(id) ON DELETE CASCADE,
+        PRIMARY KEY (subscription_id, estabelecimento_id)
+      );
     `);
 
-    // Limpa todas as tabelas relevantes antes de inserir novos dados para evitar duplicatas
-    console.log('Limpando todas as tabelas...');
-    // A ordem é importante por causa das chaves estrangeiras.
-    // TRUNCATE limpa as tabelas e RESTART IDENTITY reinicia os contadores de ID.
-    await client.query('TRUNCATE TABLE users RESTART IDENTITY CASCADE');
-    await client.query('TRUNCATE TABLE subscriptions RESTART IDENTITY CASCADE');
-    await client.query('TRUNCATE TABLE estabelecimentos RESTART IDENTITY CASCADE');
+    await client.query(`
+      CREATE TABLE notification_messages (
+        id SERIAL PRIMARY KEY,
+        message TEXT NOT NULL
+      );
+    `);
 
-    // --- Seed da tabela de mensagens de notificação ---
+    // --- 2. Populando as Tabelas ---
     const notificationMessages = [
       'Acabou de sair uma nova fornada! Venha conferir!',
       'Pão quentinho esperando por você! 🥖',
@@ -179,14 +207,12 @@ async function seedDatabase() {
       'Não perca! Produtos fresquinhos acabaram de sair do forno.',
     ];
 
-    console.log('Limpando e populando a tabela "notification_messages"...');
-    await client.query('TRUNCATE TABLE notification_messages RESTART IDENTITY CASCADE');
+    console.log('Populando a tabela "notification_messages"...');
     for (const msg of notificationMessages) {
       await client.query('INSERT INTO notification_messages (message) VALUES ($1)', [msg]);
     }
 
-    // Insere cada estabelecimento no banco de dados
-    console.log('Inserindo novos dados...');
+    console.log('Populando a tabela "estabelecimentos"...');
     for (const est of estabelecimentosData) {
       // Separa os campos principais dos detalhes para inserção nas colunas corretas
       const { id, nome, tipo, latitude, longitude, ...details } = est;
@@ -198,7 +224,7 @@ async function seedDatabase() {
       await client.query(insertQuery, [id, nome, tipo, latitude, longitude, details]);
     }
 
-    // --- Sincroniza a sequência de IDs ---
+    // --- 3. Sincronização da Sequência de IDs ---
     // Busca o maior ID inserido manualmente
     const maxIdResult = await client.query('SELECT MAX(id) FROM estabelecimentos');
     const maxId = maxIdResult.rows[0].max || 0;

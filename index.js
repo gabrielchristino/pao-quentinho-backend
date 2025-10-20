@@ -262,6 +262,52 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// --- ROTA DE SINCRONIZAÇÃO ---
+
+app.post('/api/auth/sync', authRequired, async (req, res) => {
+  const userId = req.user.userId;
+  const { anonymousEndpoints } = req.body;
+
+  console.log(`➡️  POST /api/auth/sync para o usuário ${userId}`);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Associa inscrições anônimas (feitas antes do login) a este usuário.
+    if (anonymousEndpoints && anonymousEndpoints.length > 0) {
+      console.log(`[SYNC] Associando ${anonymousEndpoints.length} inscrições anônimas ao usuário ${userId}...`);
+      const updateQuery = `
+        UPDATE subscriptions SET user_id = $1 
+        WHERE (subscription_data->>'endpoint') = ANY($2::text[]) AND user_id IS NULL
+      `;
+      await client.query(updateQuery, [userId, anonymousEndpoints]);
+    }
+
+    // 2. Busca todos os IDs de estabelecimentos que este usuário já segue em qualquer dispositivo.
+    const getSubscriptionsQuery = `
+      SELECT DISTINCT es.estabelecimento_id
+      FROM establishment_subscriptions es
+      JOIN subscriptions s ON es.subscription_id = s.id
+      WHERE s.user_id = $1;
+    `;
+    const result = await client.query(getSubscriptionsQuery, [userId]);
+    const syncedEstablishmentIds = result.rows.map(row => row.estabelecimento_id);
+
+    await client.query('COMMIT');
+
+    console.log(`✅ [SYNC] Sincronização concluída. Usuário ${userId} segue ${syncedEstablishmentIds.length} estabelecimentos.`);
+    res.status(200).json({ syncedEstablishmentIds });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ Erro durante a sincronização:', err.stack);
+    res.status(500).json({ message: 'Erro ao sincronizar inscrições.' });
+  } finally {
+    client.release();
+  }
+});
+
 // --- Middleware para autenticação opcional ---
 // Este middleware verifica se há um token, decodifica-o e anexa o usuário à requisição (req.user).
 // Se não houver token, ele simplesmente continua, permitindo o acesso anônimo.
