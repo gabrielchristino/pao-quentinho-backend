@@ -190,6 +190,9 @@ async function seedDatabase() {
       CREATE UNIQUE INDEX subscriptions_endpoint_unique_idx ON subscriptions ((subscription_data->>'endpoint'));
     `);
 
+
+
+
     await client.query(`
       CREATE TABLE establishment_subscriptions (
         subscription_id INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,

@@ -409,7 +409,7 @@ app.post('/api/subscribe', optionalAuth, async (req, res) => {
     // 1. Insere a inscrição se ela não existir e retorna o ID dela.
     const upsertSubscriptionQuery = `
       INSERT INTO subscriptions (subscription_data, user_id) VALUES ($1, $2)
-      ON CONFLICT (subscription_data) DO UPDATE SET subscription_data = EXCLUDED.subscription_data
+      ON CONFLICT (subscription_data->>'endpoint') DO UPDATE SET subscription_data = EXCLUDED.subscription_data
       RETURNING id;
     `;
     const subResult = await pool.query(upsertSubscriptionQuery, [subscription, userId]);
