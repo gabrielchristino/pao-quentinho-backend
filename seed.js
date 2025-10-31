@@ -222,7 +222,7 @@ async function seedDatabase() {
       await client.query('INSERT INTO notification_messages (message) VALUES ($1)', [msg]);
     }
 
-    console.log('Criando usuário de teste...');
+    console.log('Criando usuário lojista de teste...');
     const testUserEmail = 'gabriel.christino@gmail.com';
     const testUserPassword = '123456';
     const salt = await bcrypt.genSalt(10);
@@ -233,7 +233,19 @@ async function seedDatabase() {
       [testUserEmail, 'Usuário Lojista', passwordHash]
     );
     const testUserId = userResult.rows[0].id;
-    console.log(`Usuário de teste criado com ID: ${testUserId}. (Email: ${testUserEmail}, Senha: ${testUserPassword})`);
+    console.log(`Usuário lojista de teste criado com ID: ${testUserId}. (Email: ${testUserEmail}, Senha: ${testUserPassword})`);
+
+    console.log('Criando usuário cliente de teste...');
+    const clienteUserEmail = 'moon.tamires@gmail.com';
+    const clienteUserPassword = '123456';
+    const clienteSalt = await bcrypt.genSalt(10);
+    const clientePasswordHash = await bcrypt.hash(clienteUserPassword, clienteSalt);
+
+    const clienteUserResult = await client.query(
+      "INSERT INTO users (email, name, password_hash, role) VALUES ($1, $2, $3, 'cliente') RETURNING id",
+      [clienteUserEmail, 'Usuário Cliente', clientePasswordHash]
+    );
+    console.log(`Usuário cliente de teste criado com ID: ${clienteUserResult.rows[0].id}. (Email: ${clienteUserEmail}, Senha: ${clienteUserPassword})`);
 
 
     console.log('Populando a tabela "estabelecimentos"...');
