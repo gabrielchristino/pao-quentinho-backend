@@ -158,6 +158,7 @@ async function seedDatabase() {
         email VARCHAR(255) UNIQUE NOT NULL,
         name VARCHAR(255) NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
+        role VARCHAR(50) NOT NULL DEFAULT 'cliente',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -228,8 +229,8 @@ async function seedDatabase() {
     const passwordHash = await bcrypt.hash(testUserPassword, salt);
 
     const userResult = await client.query(
-      'INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id',
-      [testUserEmail, 'Usuário Teste', passwordHash]
+      "INSERT INTO users (email, name, password_hash, role) VALUES ($1, $2, $3, 'lojista') RETURNING id",
+      [testUserEmail, 'Usuário Lojista', passwordHash]
     );
     const testUserId = userResult.rows[0].id;
     console.log(`Usuário de teste criado com ID: ${testUserId}. (Email: ${testUserEmail}, Senha: ${testUserPassword})`);

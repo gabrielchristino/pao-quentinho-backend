@@ -138,7 +138,20 @@ const authRequired = (req, res, next) => {
   }
 };
 
-app.post('/api/estabelecimentos', authRequired, async (req, res) => {
+// Middleware para rotas que exigem perfil de lojista
+const lojistaRequired = (req, res, next) => {
+  // Primeiro, verifica se o usuário está autenticado
+  authRequired(req, res, () => {
+    // Se autenticado, verifica se o perfil é 'lojista'
+    if (req.user && req.user.role === 'lojista') {
+      next();
+    } else {
+      res.status(403).json({ message: 'Acesso negado. Rota exclusiva para lojistas.' });
+    }
+  });
+};
+
+app.post('/api/estabelecimentos', lojistaRequired, async (req, res) => {
   console.log('➡️  POST /api/estabelecimentos - Criando novo estabelecimento...');
   const { nome, tipo, latitude, longitude, details } = req.body;
   const userId = req.user.userId; // Pega o ID do usuário logado (do token)
@@ -174,7 +187,7 @@ app.post('/api/estabelecimentos', authRequired, async (req, res) => {
   }
 });
 
-app.put('/api/estabelecimentos/:id', authRequired, async (req, res) => {
+app.put('/api/estabelecimentos/:id', lojistaRequired, async (req, res) => {
   const { id } = req.params;
   const userId = req.user.userId;
   const { nome, tipo, latitude, longitude, details } = req.body;
@@ -220,7 +233,7 @@ app.put('/api/estabelecimentos/:id', authRequired, async (req, res) => {
   }
 });
 
-app.delete('/api/estabelecimentos/:id', authRequired, async (req, res) => {
+app.delete('/api/estabelecimentos/:id', lojistaRequired, async (req, res) => {
   const { id } = req.params;
   const userId = req.user.userId;
 
@@ -244,7 +257,7 @@ app.delete('/api/estabelecimentos/:id', authRequired, async (req, res) => {
 // --- ROTAS DE USUÁRIO LOGADO ---
 
 // Rota para buscar os estabelecimentos de um usuário logado
-app.get('/api/users/me/estabelecimentos', authRequired, async (req, res) => {
+app.get('/api/users/me/estabelecimentos', lojistaRequired, async (req, res) => {
   const userId = req.user.userId;
   console.log(`➡️  GET /api/users/me/estabelecimentos para o usuário ${userId}`);
 
@@ -318,7 +331,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // Gera o token JWT
-    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ token });
 
