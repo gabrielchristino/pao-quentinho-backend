@@ -262,15 +262,24 @@ app.get('/api/users/me/estabelecimentos', lojistaRequired, async (req, res) => {
   console.log(`➡️  GET /api/users/me/estabelecimentos para o usuário ${userId}`);
 
   try {
-    const result = await pool.query('SELECT id, nome, tipo, latitude, longitude, details FROM estabelecimentos WHERE user_id = $1 ORDER BY id DESC', [userId]);
+    const query = `
+      SELECT 
+        e.id, e.nome, e.tipo, e.latitude, e.longitude, e.details,
+        COUNT(es.subscription_id) AS followers_count
+      FROM 
+        estabelecimentos e
+      LEFT JOIN 
+        establishment_subscriptions es ON e.id = es.estabelecimento_id
+      WHERE e.user_id = $1
+      GROUP BY e.id
+      ORDER BY e.id DESC;
+    `;
+    const result = await pool.query(query, [userId]);
 
     // Remonta o objeto completo que o frontend espera
     const estabelecimentos = result.rows.map(row => ({
-      id: row.id,
-      nome: row.nome,
-      tipo: row.tipo,
-      latitude: row.latitude,
-      longitude: row.longitude,
+      ...row,
+      followers_count: parseInt(row.followers_count, 10), // Garante que seja um número
       ...row.details
     }));
 
