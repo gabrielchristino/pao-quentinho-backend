@@ -284,9 +284,14 @@ app.get('/api/users/me/estabelecimentos', lojistaRequired, async (req, res) => {
 // --- ROTAS DE AUTENTICAÇÃO ---
 
 app.post('/api/auth/register', async (req, res) => {
-  const { email, password, name } = req.body;
+  let { email, password, name, role } = req.body;
   if (!email || !password || !name) {
     return res.status(400).json({ message: 'Nome, email e senha são obrigatórios.' });
+  }
+
+  // Validação e valor padrão para a role
+  if (role !== 'lojista') {
+    role = 'cliente';
   }
 
   try {
@@ -295,8 +300,8 @@ app.post('/api/auth/register', async (req, res) => {
     const password_hash = await bcrypt.hash(password, salt);
 
     const result = await pool.query(
-      'INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, name',
-      [email, name, password_hash]
+      'INSERT INTO users (email, name, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role',
+      [email, name, password_hash, role]
     );
 
     res.status(201).json(result.rows[0]);
