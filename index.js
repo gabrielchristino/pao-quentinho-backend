@@ -518,10 +518,11 @@ app.delete('/api/unsubscribe', async (req, res) => {
     console.log(`[UNSUB] ID da inscrição encontrado: ${subscriptionId}.`);
 
     // 2. Remove a associação entre a inscrição e o estabelecimento.
-    await pool.query(
+    const deleteResult = await pool.query(
       'DELETE FROM establishment_subscriptions WHERE subscription_id = $1 AND estabelecimento_id = $2',
       [subscriptionId, estabelecimentoId]
     );
+    console.log(`[UNSUB] Operação de DELETE afetou ${deleteResult.rowCount} linha(s).`);
 
     res.status(200).json({ message: 'Inscrição cancelada com sucesso.' });
   } catch (err) {
