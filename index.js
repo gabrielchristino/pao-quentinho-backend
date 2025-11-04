@@ -514,7 +514,7 @@ app.post('/api/subscribe', optionalAuth, async (req, res) => {
           const notificationPayload = JSON.stringify({
             notification: {
               title: 'Novo Seguidor!',
-              body: `Parabéns! "${establishmentName}" tem um novo seguidor.`,
+              body: `Parabéns! ${establishmentName} tem um novo seguidor.`,
               icon: 'assets/icons/icon-192x192.png',
               data: {
                 onActionClick: {
