@@ -583,6 +583,60 @@ app.delete('/api/unsubscribe', async (req, res) => {
   }
 });
 
+app.post('/api/reserve', async (req, res) => {
+  const { establishmentId } = req.body;
+
+  if (!establishmentId) {
+    return res.status(400).json({ message: 'ID do estabelecimento é obrigatório.' });
+  }
+
+  console.log(`➡️  POST /api/reserve - Solicitação de reserva para o estabelecimento ${establishmentId}`);
+
+  try {
+    // 1. Encontra o dono (lojista) e o nome do estabelecimento.
+    const ownerResult = await pool.query(
+      'SELECT user_id, nome FROM estabelecimentos WHERE id = $1',
+      [establishmentId]
+    );
+
+    if (ownerResult.rowCount === 0 || !ownerResult.rows[0].user_id) {
+      console.warn(`[RESERVE] Lojista para o estabelecimento ${establishmentId} não encontrado.`);
+      // Retorna sucesso para o cliente, pois a falha é interna.
+      return res.status(200).json({ message: 'Solicitação processada.' });
+    }
+
+    const ownerId = ownerResult.rows[0].user_id;
+    const establishmentName = ownerResult.rows[0].nome;
+
+    // 2. Busca todas as inscrições de notificação associadas ao ID do lojista.
+    const ownerSubscriptionsResult = await pool.query(
+      'SELECT subscription_data FROM subscriptions WHERE user_id = $1',
+      [ownerId]
+    );
+
+    const ownerSubscriptions = ownerSubscriptionsResult.rows.map(row => row.subscription_data);
+
+    if (ownerSubscriptions.length > 0) {
+      console.log(`[RESERVE] Enviando notificação de reserva para ${ownerSubscriptions.length} dispositivo(s) do lojista.`);
+      const notificationPayload = JSON.stringify({
+        notification: {
+          title: 'Solicitação de Reserva!',
+          body: `Um cliente deseja reservar parte da fornada em "${establishmentName}"!`,
+          icon: 'assets/icons/icon-192x192.png',
+        }
+      });
+
+      const promises = ownerSubscriptions.map(sub => webpush.sendNotification(sub, notificationPayload));
+      await Promise.allSettled(promises);
+    }
+
+    res.status(200).json({ message: 'Notificação de reserva enviada ao lojista.' });
+  } catch (err) {
+    console.error('❌ Erro ao processar solicitação de reserva:', err.stack);
+    res.status(500).json({ message: 'Erro ao processar a reserva.' });
+  }
+});
+
 app.post('/api/notify/:estabelecimentoId', async (req, res) => {
     const { estabelecimentoId } = req.params;
     const { message, title } = req.body || {}; // Garante que req.body não seja nulo
@@ -626,17 +680,17 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                 icon: 'assets/icons/icon-192x192.png',
                 // Adiciona os mesmos botões de ação das notificações automáticas
                 actions: [
-                  { action: 'show-route', title: '🗺️ Ver Rota' },
+                  { action: 'reserve', title: '🥖 Reservar' },
                   { action: 'dismiss', title: '👍 Ok' }
                 ],
                 // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                 // saber como agir quando a notificação é clicada com o app fechado.
                 data: {
                   onActionClick: {
-                    // Ação padrão (clicar no corpo da notificação)
+                    // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                     default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}` },
-                    // Ação para o botão 'show-route'
-                    'show-route': { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}?action=show-route` }
+                    // Ação para o botão 'reserve' abre a página de confirmação da reserva.
+                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/reserva-confirmada?id=${estabelecimentoId}` }
                   }
                 }
             }
@@ -776,16 +830,16 @@ const checkFornadasAndNotify = async () => {
                   icon: 'assets/icons/icon-192x192.png',
                   // Define os botões que aparecerão na notificação
                   actions: [
-                    { action: 'show-route', title: '🗺️ Ver Rota' },
+                    { action: 'reserve', title: '🥖 Reservar' },
                     { action: 'dismiss', title: '👍 Ok' }
                   ],
                   // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                   data: {
                     onActionClick: {
-                      // Ação padrão (clicar no corpo da notificação)
+                      // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                       default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}` },
-                      // Ação para o botão 'show-route'
-                      'show-route': { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}?action=show-route` }
+                      // Ação para o botão 'reserve' abre a página de confirmação da reserva.
+                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/reserva-confirmada?id=${est.id}` }
                       // O botão 'dismiss' não precisa de ação aqui, pois o Service Worker o ignora por padrão.
                     }
                   }
