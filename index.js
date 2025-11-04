@@ -624,14 +624,19 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                 title: title || 'Pão Quentinho!',
                 body: notificationBody || 'Uma nova fornada acabou de sair! Venha conferir!', // Fallback final
                 icon: 'assets/icons/icon-192x192.png',
+                // Adiciona os mesmos botões de ação das notificações automáticas
+                actions: [
+                  { action: 'show-route', title: '🗺️ Ver Rota' },
+                  { action: 'dismiss', title: '👍 Ok' }
+                ],
                 // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                 // saber como agir quando a notificação é clicada com o app fechado.
                 data: {
                   onActionClick: {
-                    default: {
-                      operation: 'navigateLastFocusedOrOpen',
-                      url: `/estabelecimento/${estabelecimentoId}`
-                    }
+                    // Ação padrão (clicar no corpo da notificação)
+                    default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}` },
+                    // Ação para o botão 'show-route'
+                    'show-route': { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}?action=show-route` }
                   }
                 }
             }
