@@ -492,6 +492,41 @@ app.post('/api/subscribe', optionalAuth, async (req, res) => {
   }
 });
 
+app.delete('/api/unsubscribe', async (req, res) => {
+  const { endpoint, estabelecimentoId } = req.query;
+
+  console.log(`➡️  DELETE /api/unsubscribe para o estabelecimento ${estabelecimentoId} no dispositivo ${endpoint}`);
+
+  if (!endpoint || !estabelecimentoId) {
+    return res.status(400).json({ message: 'Endpoint e ID do estabelecimento são obrigatórios.' });
+  }
+
+  try {
+    // 1. Encontra o ID da inscrição com base no endpoint.
+    const subIdResult = await pool.query(
+      "SELECT id FROM subscriptions WHERE subscription_data->>'endpoint' = $1",
+      [endpoint]
+    );
+
+    if (subIdResult.rowCount === 0) {
+      // Se a inscrição não existe no banco, consideramos a operação um sucesso do lado do cliente.
+      return res.status(404).json({ message: 'Inscrição não encontrada para este dispositivo.' });
+    }
+    const subscriptionId = subIdResult.rows[0].id;
+
+    // 2. Remove a ligação entre a inscrição e o estabelecimento.
+    await pool.query(
+      'DELETE FROM establishment_subscriptions WHERE subscription_id = $1 AND estabelecimento_id = $2',
+      [subscriptionId, estabelecimentoId]
+    );
+
+    res.status(200).json({ message: 'Inscrição cancelada com sucesso.' });
+  } catch (err) {
+    console.error('❌ Erro ao cancelar inscrição:', err.stack);
+    res.status(500).json({ message: 'Erro ao cancelar inscrição.' });
+  }
+});
+
 app.post('/api/notify/:estabelecimentoId', async (req, res) => {
     const { estabelecimentoId } = req.params;
     const { message, title } = req.body || {}; // Garante que req.body não seja nulo
