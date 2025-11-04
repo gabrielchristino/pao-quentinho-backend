@@ -485,6 +485,54 @@ app.post('/api/subscribe', optionalAuth, async (req, res) => {
     `;
     await pool.query(linkQuery, [subscriptionId, estabelecimentoId]);
 
+    // --- LÓGICA PARA NOTIFICAR O LOJISTA VIA PUSH NOTIFICATION ---
+    try {
+      // 3. Encontra o dono (lojista) do estabelecimento.
+      const ownerResult = await pool.query(
+        'SELECT user_id, nome FROM estabelecimentos WHERE id = $1',
+        [estabelecimentoId]
+      );
+
+      if (ownerResult.rowCount > 0 && ownerResult.rows[0].user_id) {
+        const ownerId = ownerResult.rows[0].user_id;
+        const establishmentName = ownerResult.rows[0].nome;
+        console.log(`[NOTIFY-LOJISTA] Novo seguidor para "${establishmentName}". Dono (ID: ${ownerId}) identificado. Buscando suas inscrições...`);
+
+        // 4. Busca todas as inscrições de notificação associadas ao ID do lojista.
+        const ownerSubscriptionsResult = await pool.query(
+          'SELECT subscription_data FROM subscriptions WHERE user_id = $1',
+          [ownerId]
+        );
+
+        const ownerSubscriptions = ownerSubscriptionsResult.rows.map(row => row.subscription_data);
+
+        if (ownerSubscriptions.length > 0) {
+          console.log(`[NOTIFY-LOJISTA] Encontradas ${ownerSubscriptions.length} inscrições para o lojista. Enviando notificações...`);
+          const notificationPayload = JSON.stringify({
+            notification: {
+              title: 'Novo Seguidor!',
+              body: `Parabéns! "${establishmentName}" tem um novo seguidor.`,
+              icon: 'assets/icons/icon-192x192.png',
+              data: {
+                onActionClick: {
+                  default: { operation: 'navigateLastFocusedOrOpen', url: '/meus-estabelecimentos' }
+                }
+              }
+            }
+          });
+
+          // Envia a notificação para cada dispositivo do lojista.
+          const promises = ownerSubscriptions.map(sub => webpush.sendNotification(sub, notificationPayload));
+          await Promise.allSettled(promises);
+        } else {
+          console.log(`[NOTIFY-LOJISTA] O lojista (ID: ${ownerId}) não possui inscrições de notificação ativas.`);
+        }
+      }
+    } catch (notifyErr) {
+      // Se a notificação para o lojista falhar, não impede o sucesso da inscrição do usuário.
+      console.error('⚠️ Erro ao tentar notificar o lojista sobre novo seguidor:', notifyErr.stack);
+    }
+
     res.status(201).json({ message: 'Inscrição realizada com sucesso.' });
   } catch (err) {
     console.error('❌ Erro ao salvar inscrição:', err.stack);
