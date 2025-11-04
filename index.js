@@ -769,10 +769,19 @@ const checkFornadasAndNotify = async () => {
                   title: isAlmostTime ? `Está saindo agora em ${est.nome}!` : `Falta 1h para a fornada em ${est.nome}!`,
                   body: randomMessage,
                   icon: 'assets/icons/icon-192x192.png',
+                  // Define os botões que aparecerão na notificação
+                  actions: [
+                    { action: 'show-route', title: '🗺️ Ver Rota' },
+                    { action: 'dismiss', title: '👍 Ok' }
+                  ],
                   // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                   data: {
                     onActionClick: {
-                      default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}` }
+                      // Ação padrão (clicar no corpo da notificação)
+                      default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}` },
+                      // Ação para o botão 'show-route'
+                      'show-route': { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}?action=show-route` }
+                      // O botão 'dismiss' não precisa de ação aqui, pois o Service Worker o ignora por padrão.
                     }
                   }
                 }
