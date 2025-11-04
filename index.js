@@ -478,12 +478,15 @@ app.post('/api/subscribe', optionalAuth, async (req, res) => {
     const subResult = await pool.query(upsertSubscriptionQuery, [subscription, userId]);
     const subscriptionId = subResult.rows[0].id;
 
-    // 2. Cria a ligação entre a inscrição e o estabelecimento.
-    const linkQuery = `
-      INSERT INTO establishment_subscriptions (subscription_id, estabelecimento_id) VALUES ($1, $2)
-      ON CONFLICT (subscription_id, estabelecimento_id) DO NOTHING;
-    `;
-    await pool.query(linkQuery, [subscriptionId, estabelecimentoId]);
+    // 2. Cria a ligação entre a inscrição e o estabelecimento, SE NÃO FOR UMA INSCRIÇÃO DE LOJISTA.
+    // O ID -1 é um sinalizador vindo do frontend para indicar que é apenas o registro do dispositivo do lojista.
+    if (estabelecimentoId !== -1) {
+      const linkQuery = `
+        INSERT INTO establishment_subscriptions (subscription_id, estabelecimento_id) VALUES ($1, $2)
+        ON CONFLICT (subscription_id, estabelecimento_id) DO NOTHING;
+      `;
+      await pool.query(linkQuery, [subscriptionId, estabelecimentoId]);
+    }
 
     // --- LÓGICA PARA NOTIFICAR O LOJISTA VIA PUSH NOTIFICATION ---
     try {
