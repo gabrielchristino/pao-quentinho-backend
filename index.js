@@ -290,6 +290,38 @@ app.get('/api/users/me/estabelecimentos', lojistaRequired, async (req, res) => {
   }
 });
 
+// Rota para buscar os estabelecimentos que um usuário (cliente) segue
+app.get('/api/users/me/inscricoes', authRequired, async (req, res) => {
+  const userId = req.user.userId;
+  console.log(`➡️  GET /api/users/me/inscricoes para o usuário ${userId}`);
+
+  try {
+    const query = `
+      SELECT DISTINCT
+        e.id, e.nome, e.tipo, e.latitude, e.longitude, e.details
+      FROM
+        estabelecimentos e
+      JOIN
+        establishment_subscriptions es ON e.id = es.estabelecimento_id
+      JOIN
+        subscriptions s ON es.subscription_id = s.id
+      WHERE
+        s.user_id = $1
+      ORDER BY
+        e.nome;
+    `;
+    const result = await pool.query(query, [userId]);
+
+    const estabelecimentos = result.rows.map(row => ({
+      ...row,
+      ...row.details
+    }));
+    res.status(200).json(estabelecimentos);
+  } catch (err) {
+    console.error(`❌ Erro ao buscar inscrições do usuário ${userId}:`, err.stack);
+    res.status(500).json({ message: 'Erro ao buscar suas inscrições.' });
+  }
+});
 // --- ROTAS DE AUTENTICAÇÃO ---
 
 app.post('/api/auth/register', async (req, res) => {
