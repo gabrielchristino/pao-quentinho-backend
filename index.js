@@ -504,17 +504,20 @@ app.delete('/api/unsubscribe', async (req, res) => {
   try {
     // 1. Encontra o ID da inscrição com base no endpoint.
     const subIdResult = await pool.query(
-      "SELECT id FROM subscriptions WHERE subscription_data->>'endpoint' = $1",
+      "SELECT id FROM subscriptions WHERE subscription_data->>'endpoint' = $1 LIMIT 1",
       [endpoint]
     );
 
-    if (subIdResult.rowCount === 0) {
-      // Se a inscrição não existe no banco, consideramos a operação um sucesso do lado do cliente.
+    console.log(`[UNSUB] Busca pelo endpoint resultou em ${subIdResult.rowCount} linha(s).`);
+
+    if (subIdResult.rowCount === 0 || !subIdResult.rows[0]) {
+      console.warn(`[UNSUB] Inscrição com endpoint ${endpoint} não encontrada no banco.`);
       return res.status(404).json({ message: 'Inscrição não encontrada para este dispositivo.' });
     }
     const subscriptionId = subIdResult.rows[0].id;
+    console.log(`[UNSUB] ID da inscrição encontrado: ${subscriptionId}.`);
 
-    // 2. Remove a ligação entre a inscrição e o estabelecimento.
+    // 2. Remove a associação entre a inscrição e o estabelecimento.
     await pool.query(
       'DELETE FROM establishment_subscriptions WHERE subscription_id = $1 AND estabelecimento_id = $2',
       [subscriptionId, estabelecimentoId]
@@ -522,6 +525,7 @@ app.delete('/api/unsubscribe', async (req, res) => {
 
     res.status(200).json({ message: 'Inscrição cancelada com sucesso.' });
   } catch (err) {
+    // Este log agora deve capturar qualquer erro inesperado durante o processo.
     console.error('❌ Erro ao cancelar inscrição:', err.stack);
     res.status(500).json({ message: 'Erro ao cancelar inscrição.' });
   }
