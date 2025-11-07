@@ -643,6 +643,17 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
 
     console.log(`➡️  POST /api/notify/${estabelecimentoId} - Disparando notificação manual...`);
 
+    let establishmentName = null; // Fallback padrão
+
+    // Busca o nome do estabelecimento no banco de dados
+    try {
+        const establishmentResult = await pool.query('SELECT nome FROM estabelecimentos WHERE id = $1', [estabelecimentoId]);
+        if (establishmentResult.rowCount > 0) {
+            establishmentName = establishmentResult.rows[0].nome;
+        }
+    } catch (err) {
+        console.error(`❌ Erro ao buscar nome do estabelecimento ${estabelecimentoId}:`, err.stack);
+    }
     try {
         // Busca as inscrições para um estabelecimento específico, fazendo o JOIN com a tabela de junção
         const query = `
@@ -675,7 +686,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
 
         const notificationPayload = {
             notification: {
-                title: title || 'Pão Quentinho!',
+                title: title || `Fornada Quentinha${establishmentName ? ' em ' + establishmentName : ''}!`,
                 body: notificationBody || 'Uma nova fornada acabou de sair! Venha conferir!', // Fallback final
                 icon: 'assets/icons/icon-192x192.png',
                 // Adiciona os mesmos botões de ação das notificações automáticas
