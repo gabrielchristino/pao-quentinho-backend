@@ -840,10 +840,10 @@ const checkFornadasAndNotify = async () => {
                   body: randomMessage,
                   icon: 'assets/icons/icon-192x192.png',
                   // Define os botões que aparecerão na notificação
-                  actions: [
-                    { action: 'reserve', title: '🥖 Reservar' },
-                    { action: 'dismiss', title: '👍 Ok' }
-                  ],
+                  // actions: [
+                  //   { action: 'reserve', title: '🥖 Reservar' },
+                  //   { action: 'dismiss', title: '👍 Ok' }
+                  // ],
                   // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                   data: {
                     onActionClick: {
