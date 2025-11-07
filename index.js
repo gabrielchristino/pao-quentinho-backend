@@ -621,7 +621,7 @@ app.post('/api/reserve', async (req, res) => {
       const notificationPayload = JSON.stringify({
         notification: {
           title: 'Solicitação de Reserva!',
-          body: `Um cliente deseja reservar parte da fornada em "${establishmentName}"!`,
+          body: `Um cliente deseja reservar parte da fornada em ${establishmentName}!`,
           icon: 'assets/icons/icon-192x192.png',
         }
       });
