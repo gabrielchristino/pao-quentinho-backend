@@ -690,10 +690,10 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                 body: notificationBody || 'Uma nova fornada acabou de sair! Venha conferir!', // Fallback final
                 icon: 'assets/icons/icon-192x192.png',
                 // Adiciona os mesmos botões de ação das notificações automáticas
-                actions: [
-                  { action: 'reserve', title: '🥖 Reservar' },
-                  { action: 'dismiss', title: '👍 Ok' }
-                ],
+                // actions: [
+                //   { action: 'reserve', title: '🥖 Reservar' },
+                //   { action: 'dismiss', title: '👍 Ok' }
+                // ],
                 // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                 // saber como agir quando a notificação é clicada com o app fechado.
                 data: {
