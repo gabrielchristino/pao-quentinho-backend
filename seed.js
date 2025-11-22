@@ -215,6 +215,25 @@ async function seedDatabase() {
       'Pão quentinho esperando por você! 🥖',
       'Sentiu o cheirinho? Fornada nova na área!',
       'Não perca! Produtos fresquinhos acabaram de sair do forno.',
+      "Ei, saiu uma fornada! Corra antes que esfrie 🥐🔥",
+      "Pão quentinho esperando por você! 🥖😊",
+      "Sentiu o cheirinho? Fornada nova na área! 😋",
+      "Não perca! Produtos fresquinhos acabaram de sair do forno. ✨",
+      "Fornada saindo agora — vem buscar o seu! 🚶‍♀️🥯",
+      "Pausa para o cheirinho: nova fornada disponível 👃💛",
+      "O padeiro mandou avisar: saiu mais pão! 👨‍🍳🔥",
+      "Tem pãozinho quentinho na vitrine — corre antes que acabe 😍",
+      "Hora do lanche: fornada saindo neste momento 🍩😋",
+      "Acerte o passo: pão quente te espera na loja! 🚗💨",
+      "Traga fome — temos pão quentinho saindo do forno 😄🍞",
+      "Sabor recém-saído do forno — experimente hoje mesmo 👅🔥",
+      "Pães fresquinhos chegaram 🥖🌿",
+      "Atenção, amante de pão: novidade quentinha disponível! ❤️🥐",
+      "Pequena felicidade do dia: fornada pronta 🙌🍞",
+      "Aviso amigo: pão quentinho na área — passa aqui! 🫶",
+      "Leveza no paladar: novos pães acabaram de sair do forno ☁️🥐",
+      "Não esquece: temos seu pão preferido quentinho agora 🔔🥖",
+      "Sorriso + pão quente = dia feliz. Venha conferir! 😁🥯"
     ];
 
     console.log('Populando a tabela "notification_messages"...');
