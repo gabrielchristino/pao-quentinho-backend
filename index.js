@@ -583,16 +583,25 @@ app.delete('/api/unsubscribe', async (req, res) => {
   }
 });
 
-app.post('/api/reserve', async (req, res) => {
-  const { establishmentId } = req.body;
+app.post('/api/reserve', authRequired, async (req, res) => {
+  const { establishmentId } = req.body; // O ID do estabelecimento vem do corpo da requisição
+  const userId = req.user.userId; // O ID do usuário vem do token (middleware authRequired)
+  const userName = req.user.name; // O nome do usuário vem do token (middleware authRequired)
 
   if (!establishmentId) {
     return res.status(400).json({ message: 'ID do estabelecimento é obrigatório.' });
   }
 
-  console.log(`➡️  POST /api/reserve - Solicitação de reserva para o estabelecimento ${establishmentId}`);
+  console.log(`➡️  POST /api/reserve - Usuário ${userName} solicitou reserva para o estabelecimento ${establishmentId}`);
 
   try {
+    // 1. Incrementa o contador de reservas para o usuário que fez a solicitação.
+    await pool.query(
+      'UPDATE users SET reserve_count = reserve_count + 1 WHERE id = $1',
+      [userId]
+    );
+    console.log(`[RESERVE] Contador de reservas incrementado para o usuário ${userId} - ${userName}.`);
+
     // 1. Encontra o dono (lojista) e o nome do estabelecimento.
     const ownerResult = await pool.query(
       'SELECT user_id, nome FROM estabelecimentos WHERE id = $1',
@@ -621,7 +630,7 @@ app.post('/api/reserve', async (req, res) => {
       const notificationPayload = JSON.stringify({
         notification: {
           title: 'Solicitação de Reserva!',
-          body: `Um cliente deseja reservar parte da fornada em ${establishmentName}!`,
+          body: `O cliente ${userName} deseja reservar parte da fornada em ${establishmentName}!`,
           icon: 'assets/icons/icon-192x192.png',
         }
       });
@@ -690,10 +699,10 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                 body: notificationBody || 'Uma nova fornada acabou de sair! Venha conferir!', // Fallback final
                 icon: 'assets/icons/icon-192x192.png',
                 // Adiciona os mesmos botões de ação das notificações automáticas
-                // actions: [
-                //   { action: 'reserve', title: '🥖 Reservar' },
-                //   { action: 'dismiss', title: '👍 Ok' }
-                // ],
+                actions: [
+                  { action: 'reserve', title: '🥖 Reservar' },
+                  { action: 'dismiss', title: '👍 Agora não' }
+                ],
                 // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                 // saber como agir quando a notificação é clicada com o app fechado.
                 data: {
@@ -840,10 +849,10 @@ const checkFornadasAndNotify = async () => {
                   body: randomMessage,
                   icon: 'assets/icons/icon-192x192.png',
                   // Define os botões que aparecerão na notificação
-                  // actions: [
-                  //   { action: 'reserve', title: '🥖 Reservar' },
-                  //   { action: 'dismiss', title: '👍 Ok' }
-                  // ],
+                  actions: [
+                    { action: 'reserve', title: '🥖 Reservar' },
+                    { action: 'dismiss', title: '👍 Agora não' }
+                  ],
                   // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                   data: {
                     onActionClick: {
