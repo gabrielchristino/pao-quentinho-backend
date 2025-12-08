@@ -710,7 +710,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                     // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                     default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}` },
                     // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}?action=reserve` }
+                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `?open_establishment_id=${estabelecimentoId}&action=reserve` }
                   }
                 }
             }
@@ -859,7 +859,7 @@ const checkFornadasAndNotify = async () => {
                       // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                       default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}` },
                       // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}?action=reserve` }
+                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `?open_establishment_id=${est.id}&action=reserve` }
                       // O botão 'dismiss' não precisa de ação aqui, pois o Service Worker o ignora por padrão.
                     }
                   }

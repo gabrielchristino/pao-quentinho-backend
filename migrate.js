@@ -20,8 +20,19 @@ async function run() {
         name VARCHAR(255) NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL DEFAULT 'cliente',
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        reserve_count INTEGER NOT NULL DEFAULT 0
       );
+    `);
+
+    // Adiciona a coluna reserve_count se ela não existir, para não quebrar migrações futuras
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT FROM pg_attribute WHERE attrelid = 'users'::regclass AND attname = 'reserve_count') THEN
+          ALTER TABLE users ADD COLUMN reserve_count INTEGER NOT NULL DEFAULT 0;
+        END IF;
+      END$$;
     `);
 
     await client.query(`
