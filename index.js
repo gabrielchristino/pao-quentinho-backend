@@ -610,7 +610,8 @@ app.post('/api/reserve', authRequired, async (req, res) => {
       console.log(`[RESERVE] Bloqueado: Usuário ${userId} (${userName}) atingiu o limite de ${FREE_PLAN_RESERVATION_LIMIT} reservas do plano gratuito.`);
       await client.query('ROLLBACK');
       return res.status(403).json({
-        message: 'Você atingiu o limite de reservas do seu plano gratuito.',
+        title: 'Limite de Reservas Atingido',
+        message: 'Que bom que você está aproveitando! 🧡 Você atingiu o limite de reservas deste mês no plano gratuito. Que tal dar uma olhada nos nossos planos para reservar pão quentinho sempre que quiser?',
         limitReached: true
       });
     }
