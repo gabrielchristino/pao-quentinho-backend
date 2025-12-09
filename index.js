@@ -400,7 +400,16 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const query = `
+      SELECT 
+        u.id, u.email, u.name, u.role, u.password_hash,
+        p.id as plan_id, p.name as plan_name, p.description as plan_description
+      FROM 
+        users u
+      LEFT JOIN 
+        plans p ON u.current_plan = p.id
+      WHERE u.email = $1`;
+    const result = await pool.query(query, [email]);
     const user = result.rows[0];
 
     if (!user) {
@@ -413,8 +422,20 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ message: 'Credenciais inválidas.' }); // Senha incorreta
     }
 
+    // Monta o objeto do plano para o JWT
+    const plan = user.plan_id ? {
+      id: user.plan_id,
+      name: user.plan_name,
+      description: user.plan_description
+    } : null;
+
     // Gera o token JWT
-    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role, current_plan: user.current_plan }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const tokenPayload = {
+      userId: user.id, email: user.email, name: user.name, role: user.role,
+      plan: plan
+    };
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ token });
 
@@ -430,16 +451,32 @@ app.get('/api/auth/refresh', authRequired, async (req, res) => {
   console.log(`➡️  GET /api/auth/refresh para o usuário ${userId}`);
 
   try {
-    // Busca os dados mais recentes do usuário no banco
-    const result = await pool.query('SELECT id, email, name, role, current_plan FROM users WHERE id = $1', [userId]);
+    // Busca os dados mais recentes do usuário e do seu plano no banco
+    const query = `
+      SELECT 
+        u.id, u.email, u.name, u.role,
+        p.id as plan_id, p.name as plan_name, p.description as plan_description
+      FROM 
+        users u
+      LEFT JOIN 
+        plans p ON u.current_plan = p.id
+      WHERE u.id = $1`;
+    const result = await pool.query(query, [userId]);
     const user = result.rows[0];
 
     if (!user) {
       return res.status(404).json({ message: 'Usuário não encontrado.' });
     }
 
+    // Monta o objeto do plano para o novo JWT
+    const plan = user.plan_id ? {
+      id: user.plan_id,
+      name: user.plan_name,
+      description: user.plan_description
+    } : null;
+
     // Gera um novo token com as informações atualizadas
-    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role, current_plan: user.current_plan }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role, plan: plan }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ token });
 
