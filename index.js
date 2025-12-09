@@ -472,7 +472,9 @@ app.get('/api/auth/refresh', authRequired, async (req, res) => {
     const plan = user.plan_id ? {
       id: user.plan_id,
       name: user.plan_name,
-      description: user.plan_description
+      description: user.plan_description,
+      benefits: user.plan_benefits,
+      price: user.plan_price
     } : null;
 
     // Gera um novo token com as informações atualizadas
