@@ -455,7 +455,7 @@ app.get('/api/auth/refresh', authRequired, async (req, res) => {
     const query = `
       SELECT 
         u.id, u.email, u.name, u.role,
-        p.id as plan_id, p.name as plan_name, p.description as plan_description
+        p.id as plan_id, p.name as plan_name, p.description as plan_description, p.benefits as plan_benefits
       FROM 
         users u
       LEFT JOIN 
