@@ -24,6 +24,9 @@ const pool = new Pool({
   }
 });
 
+// --- Constantes de Planos ---
+const FREE_PLAN_RESERVATION_LIMIT = 5; // Limite de reservas por mês para o plano gratuito
+
 // Middlewares
 app.use(cors());
 app.use(express.json());
@@ -594,30 +597,48 @@ app.post('/api/reserve', authRequired, async (req, res) => {
 
   console.log(`➡️  POST /api/reserve - Usuário ${userName} solicitou reserva para o estabelecimento ${establishmentId}`);
 
+  const client = await pool.connect();
   try {
-    // 1. Incrementa o contador de reservas para o usuário que fez a solicitação.
-    await pool.query(
+    await client.query('BEGIN');
+
+    // 1. Busca o usuário e bloqueia a linha para evitar race conditions
+    const userResult = await client.query('SELECT current_plan, reserve_count FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    const user = userResult.rows[0];
+
+    // 2. Verifica se o usuário está no plano gratuito (0) e se atingiu o limite
+    if (user.current_plan === 0 && user.reserve_count >= FREE_PLAN_RESERVATION_LIMIT) {
+      console.log(`[RESERVE] Bloqueado: Usuário ${userId} (${userName}) atingiu o limite de ${FREE_PLAN_RESERVATION_LIMIT} reservas do plano gratuito.`);
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        message: 'Você atingiu o limite de reservas do seu plano gratuito.',
+        limitReached: true
+      });
+    }
+
+    // 3. Se o limite não foi atingido, incrementa o contador de reservas.
+    await client.query(
       'UPDATE users SET reserve_count = reserve_count + 1 WHERE id = $1',
       [userId]
     );
     console.log(`[RESERVE] Contador de reservas incrementado para o usuário ${userId} - ${userName}.`);
 
-    // 1. Encontra o dono (lojista) e o nome do estabelecimento.
+    // 4. Encontra o dono (lojista) e o nome do estabelecimento para notificação.
     const ownerResult = await pool.query(
       'SELECT user_id, nome FROM estabelecimentos WHERE id = $1',
       [establishmentId]
     );
 
     if (ownerResult.rowCount === 0 || !ownerResult.rows[0].user_id) {
-      console.warn(`[RESERVE] Lojista para o estabelecimento ${establishmentId} não encontrado.`);
-      // Retorna sucesso para o cliente, pois a falha é interna.
+      console.warn(`[RESERVE] Lojista para o estabelecimento ${establishmentId} não encontrado. A reserva foi contada, mas a notificação não será enviada.`);
+      // Mesmo sem lojista, a reserva do usuário foi contabilizada, então commitamos e retornamos sucesso.
+      await client.query('COMMIT');
       return res.status(200).json({ message: 'Solicitação processada.' });
     }
 
     const ownerId = ownerResult.rows[0].user_id;
     const establishmentName = ownerResult.rows[0].nome;
 
-    // 2. Busca todas as inscrições de notificação associadas ao ID do lojista.
+    // 5. Busca todas as inscrições de notificação associadas ao ID do lojista.
     const ownerSubscriptionsResult = await pool.query(
       'SELECT subscription_data FROM subscriptions WHERE user_id = $1',
       [ownerId]
@@ -639,10 +660,14 @@ app.post('/api/reserve', authRequired, async (req, res) => {
       await Promise.allSettled(promises);
     }
 
+    await client.query('COMMIT');
     res.status(200).json({ message: 'Notificação de reserva enviada ao lojista.' });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('❌ Erro ao processar solicitação de reserva:', err.stack);
     res.status(500).json({ message: 'Erro ao processar a reserva.' });
+  } finally {
+    client.release();
   }
 });
 
