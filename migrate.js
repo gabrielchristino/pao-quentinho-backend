@@ -96,6 +96,25 @@ async function run() {
       );
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS plans (
+        id INTEGER PRIMARY KEY, -- Usamos INTEGER e não SERIAL para controlar os IDs
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        benefits TEXT[] NOT NULL,
+        price NUMERIC(10, 2) NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT true
+      );
+    `);
+
+    console.log('Tabela "plans" verificada/criada. Inserindo plano padrão se necessário...');
+
+    await client.query(
+      `INSERT INTO plans (id, name, description, benefits, price, is_active)
+       SELECT 1, 'Pão Quentinho Pro', 'Reservas ilimitadas e muito mais para você nunca perder uma fornada.', ARRAY['Número ilimitado de reservas por mês'], 4.99, true
+       WHERE NOT EXISTS (SELECT 1 FROM plans WHERE id = 1)`
+    );
+
     console.log('Tabelas criadas/verificadas com sucesso. Inserindo mensagens padrão se necessário...');
 
     const defaultMessages = [

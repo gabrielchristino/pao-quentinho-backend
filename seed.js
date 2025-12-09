@@ -148,6 +148,7 @@ async function seedDatabase() {
       DROP TABLE IF EXISTS subscriptions;
       DROP TABLE IF EXISTS estabelecimentos;
       DROP TABLE IF EXISTS users;
+      DROP TABLE IF EXISTS plans;
       DROP TABLE IF EXISTS notification_messages;
     `);
 
@@ -211,6 +212,17 @@ async function seedDatabase() {
       );
     `);
 
+    await client.query(`
+      CREATE TABLE plans (
+        id INTEGER PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        benefits TEXT[] NOT NULL,
+        price NUMERIC(10, 2) NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT true
+      );
+    `);
+
     // --- 2. Populando as Tabelas ---
     const notificationMessages = [
       'Acabou de sair uma nova fornada! Venha conferir!',
@@ -242,6 +254,13 @@ async function seedDatabase() {
     for (const msg of notificationMessages) {
       await client.query('INSERT INTO notification_messages (message) VALUES ($1)', [msg]);
     }
+
+    console.log('Populando a tabela "plans"...');
+    await client.query(
+      `INSERT INTO plans (id, name, description, benefits, price, is_active)
+       VALUES (1, 'Pão Quentinho Pro', 'Reservas ilimitadas e muito mais para você nunca perder uma fornada.', ARRAY['Número ilimitado de reservas por mês'], 4.99, true)`
+    );
+
 
     console.log('Criando usuário lojista de teste...');
     const testUserEmail = 'gabriel.christino@gmail.com';

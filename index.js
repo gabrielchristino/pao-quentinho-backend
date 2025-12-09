@@ -325,6 +325,40 @@ app.get('/api/users/me/inscricoes', authRequired, async (req, res) => {
     res.status(500).json({ message: 'Erro ao buscar suas inscrições.' });
   }
 });
+
+// --- ROTAS DE PLANOS ---
+
+// Rota para listar os planos disponíveis
+app.get('/api/plans', authRequired, async (req, res) => {
+  console.log('➡️  GET /api/plans - Listando planos');
+  try {
+    const result = await pool.query('SELECT id, name, description, benefits, price FROM plans WHERE is_active = true ORDER BY price');
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error('❌ Erro ao buscar planos:', err.stack);
+    res.status(500).json({ message: 'Erro ao buscar os planos.' });
+  }
+});
+
+// Rota para um usuário atualizar seu plano
+app.put('/api/users/me/plan', authRequired, async (req, res) => {
+  const userId = req.user.userId;
+  const { planId } = req.body;
+
+  console.log(`➡️  PUT /api/users/me/plan - Usuário ${userId} selecionou o plano ${planId}`);
+
+  if (typeof planId !== 'number') {
+    return res.status(400).json({ message: 'O ID do plano é obrigatório.' });
+  }
+
+  try {
+    await pool.query('UPDATE users SET current_plan = $1 WHERE id = $2', [planId, userId]);
+    res.status(200).json({ message: 'Plano atualizado com sucesso!' });
+  } catch (err) {
+    console.error(`❌ Erro ao atualizar plano para o usuário ${userId}:`, err.stack);
+    res.status(500).json({ message: 'Erro ao atualizar o plano.' });
+  }
+});
 // --- ROTAS DE AUTENTICAÇÃO ---
 
 app.post('/api/auth/register', async (req, res) => {
@@ -380,13 +414,38 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // Gera o token JWT
-    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role, current_plan: user.current_plan }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ token });
 
   } catch (err) {
     console.error('❌ Erro no login:', err.stack);
     res.status(500).json({ message: 'Erro interno do servidor.' });
+  }
+});
+
+// Rota para obter um novo token com dados atualizados
+app.get('/api/auth/refresh', authRequired, async (req, res) => {
+  const userId = req.user.userId;
+  console.log(`➡️  GET /api/auth/refresh para o usuário ${userId}`);
+
+  try {
+    // Busca os dados mais recentes do usuário no banco
+    const result = await pool.query('SELECT id, email, name, role, current_plan FROM users WHERE id = $1', [userId]);
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado.' });
+    }
+
+    // Gera um novo token com as informações atualizadas
+    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role, current_plan: user.current_plan }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({ token });
+
+  } catch (err) {
+    console.error(`❌ Erro ao atualizar token para o usuário ${userId}:`, err.stack);
+    res.status(500).json({ message: 'Erro interno ao atualizar o token.' });
   }
 });
 
