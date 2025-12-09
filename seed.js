@@ -160,7 +160,8 @@ async function seedDatabase() {
         password_hash VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL DEFAULT 'cliente',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-        reserve_count INTEGER NOT NULL DEFAULT 0
+        reserve_count INTEGER NOT NULL DEFAULT 0,
+        current_plan INTEGER NOT NULL DEFAULT 0
       );
     `);
 

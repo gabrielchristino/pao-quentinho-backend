@@ -21,7 +21,8 @@ async function run() {
         password_hash VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL DEFAULT 'cliente',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-        reserve_count INTEGER NOT NULL DEFAULT 0
+        reserve_count INTEGER NOT NULL DEFAULT 0,
+        current_plan INTEGER NOT NULL DEFAULT 0
       );
     `);
 
@@ -31,6 +32,16 @@ async function run() {
       BEGIN
         IF NOT EXISTS (SELECT FROM pg_attribute WHERE attrelid = 'users'::regclass AND attname = 'reserve_count') THEN
           ALTER TABLE users ADD COLUMN reserve_count INTEGER NOT NULL DEFAULT 0;
+        END IF;
+      END$$;
+    `);
+
+    // Adiciona a coluna current_plan se ela não existir
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT FROM pg_attribute WHERE attrelid = 'users'::regclass AND attname = 'current_plan') THEN
+          ALTER TABLE users ADD COLUMN current_plan INTEGER NOT NULL DEFAULT 0;
         END IF;
       END$$;
     `);

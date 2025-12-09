@@ -895,6 +895,20 @@ const checkFornadasAndNotify = async () => {
 };
 
 /**
+ * Zera o contador de reservas de todos os usuários.
+ * Agendado para rodar à meia-noite do primeiro dia de cada mês.
+ */
+const resetReserveCounts = async () => {
+  console.log('🗓️  [CRON] Iniciando rotina mensal para zerar contagem de reservas...');
+  try {
+    const result = await pool.query('UPDATE users SET reserve_count = 0');
+    console.log(`✅ [CRON] Contagem de reservas zerada. ${result.rowCount} usuários foram atualizados.`);
+  } catch (err) {
+    console.error('❌ [CRON] Erro ao zerar a contagem de reservas:', err.stack);
+  }
+};
+
+/**
  * Calcula a distância em KM entre duas coordenadas geográficas usando a fórmula de Haversine.
  */
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -931,6 +945,9 @@ const startServer = async () => {
 
       // Agenda a verificação de fornadas para rodar a cada 5 minutos.
       cron.schedule('*/5 * * * *', checkFornadasAndNotify, { timezone: "America/Sao_Paulo" });
+
+      // Agenda a rotina para zerar a contagem de reservas todo dia 1º do mês à meia-noite.
+      cron.schedule('0 0 1 * *', resetReserveCounts, { timezone: "America/Sao_Paulo" });
     });
   } catch (err) {
     console.error('🔥 Falha ao iniciar o servidor:', err.message);
