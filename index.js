@@ -803,6 +803,11 @@ app.post('/api/reserve', authRequired, async (req, res) => {
           title: 'Solicitação de Reserva!',
           body: `O cliente ${userName} deseja reservar parte da fornada ${finalReservationTime ? 'das ' + finalReservationTime + ' ' : ''}em ${establishmentName}!`,
           icon: 'assets/icons/icon-192x192.png',
+          data: {
+            onActionClick: {
+              default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${establishmentId}/reservas` }
+            }
+          }
         }
       });
 
