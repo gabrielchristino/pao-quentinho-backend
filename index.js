@@ -24,6 +24,11 @@ const pool = new Pool({
   }
 });
 
+// --- Constantes de Planos ---
+ // Limite de reservas por mês para o plano gratuito. O valor padrão é 5, mas pode ser sobrescrito pela variável de ambiente.
+const envLimit = parseInt(process.env.FREE_PLAN_RESERVATION_LIMIT, 10);
+const FREE_PLAN_RESERVATION_LIMIT = !isNaN(envLimit) ? envLimit : 5;
+
 // Middlewares
 app.use(cors());
 app.use(express.json());
@@ -322,6 +327,40 @@ app.get('/api/users/me/inscricoes', authRequired, async (req, res) => {
     res.status(500).json({ message: 'Erro ao buscar suas inscrições.' });
   }
 });
+
+// --- ROTAS DE PLANOS ---
+
+// Rota para listar os planos disponíveis
+app.get('/api/plans', authRequired, async (req, res) => {
+  console.log('➡️  GET /api/plans - Listando planos');
+  try {
+    const result = await pool.query('SELECT id, name, description, benefits, price FROM plans WHERE is_active = true ORDER BY price');
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error('❌ Erro ao buscar planos:', err.stack);
+    res.status(500).json({ message: 'Erro ao buscar os planos.' });
+  }
+});
+
+// Rota para um usuário atualizar seu plano
+app.put('/api/users/me/plan', authRequired, async (req, res) => {
+  const userId = req.user.userId;
+  const { planId } = req.body;
+
+  console.log(`➡️  PUT /api/users/me/plan - Usuário ${userId} selecionou o plano ${planId}`);
+
+  if (typeof planId !== 'number') {
+    return res.status(400).json({ message: 'O ID do plano é obrigatório.' });
+  }
+
+  try {
+    await pool.query('UPDATE users SET current_plan = $1 WHERE id = $2', [planId, userId]);
+    res.status(200).json({ message: 'Plano atualizado com sucesso!' });
+  } catch (err) {
+    console.error(`❌ Erro ao atualizar plano para o usuário ${userId}:`, err.stack);
+    res.status(500).json({ message: 'Erro ao atualizar o plano.' });
+  }
+});
 // --- ROTAS DE AUTENTICAÇÃO ---
 
 app.post('/api/auth/register', async (req, res) => {
@@ -363,7 +402,16 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const query = `
+      SELECT 
+        u.id, u.email, u.name, u.role, u.password_hash,
+        p.id as plan_id, p.name as plan_name, p.description as plan_description
+      FROM 
+        users u
+      LEFT JOIN 
+        plans p ON u.current_plan = p.id
+      WHERE u.email = $1`;
+    const result = await pool.query(query, [email]);
     const user = result.rows[0];
 
     if (!user) {
@@ -376,14 +424,69 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ message: 'Credenciais inválidas.' }); // Senha incorreta
     }
 
+    // Monta o objeto do plano para o JWT
+    const plan = user.plan_id ? {
+      id: user.plan_id,
+      name: user.plan_name,
+      description: user.plan_description
+    } : null;
+
     // Gera o token JWT
-    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const tokenPayload = {
+      userId: user.id, email: user.email, name: user.name, role: user.role,
+      plan: plan
+    };
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ token });
 
   } catch (err) {
     console.error('❌ Erro no login:', err.stack);
     res.status(500).json({ message: 'Erro interno do servidor.' });
+  }
+});
+
+// Rota para obter um novo token com dados atualizados
+app.get('/api/auth/refresh', authRequired, async (req, res) => {
+  const userId = req.user.userId;
+  console.log(`➡️  GET /api/auth/refresh para o usuário ${userId}`);
+
+  try {
+    // Busca os dados mais recentes do usuário e do seu plano no banco
+    const query = `
+      SELECT 
+        u.id, u.email, u.name, u.role,
+        p.id as plan_id, p.name as plan_name, p.description as plan_description, p.benefits as plan_benefits, p.price as plan_price
+      FROM 
+        users u
+      LEFT JOIN 
+        plans p ON u.current_plan = p.id
+      WHERE u.id = $1`;
+    const result = await pool.query(query, [userId]);
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado.' });
+    }
+
+    // Monta o objeto do plano para o novo JWT
+    const plan = user.plan_id ? {
+      id: user.plan_id,
+      name: user.plan_name,
+      description: user.plan_description,
+      benefits: user.plan_benefits,
+      price: user.plan_price
+    } : null;
+
+    // Gera um novo token com as informações atualizadas
+    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role, plan: plan }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({ token });
+
+  } catch (err) {
+    console.error(`❌ Erro ao atualizar token para o usuário ${userId}:`, err.stack);
+    res.status(500).json({ message: 'Erro interno ao atualizar o token.' });
   }
 });
 
@@ -583,32 +686,60 @@ app.delete('/api/unsubscribe', async (req, res) => {
   }
 });
 
-app.post('/api/reserve', async (req, res) => {
-  const { establishmentId } = req.body;
+app.post('/api/reserve', authRequired, async (req, res) => {
+  const { establishmentId } = req.body; // O ID do estabelecimento vem do corpo da requisição
+  const userId = req.user.userId; // O ID do usuário vem do token (middleware authRequired)
+  const userName = req.user.name; // O nome do usuário vem do token (middleware authRequired)
 
   if (!establishmentId) {
     return res.status(400).json({ message: 'ID do estabelecimento é obrigatório.' });
   }
 
-  console.log(`➡️  POST /api/reserve - Solicitação de reserva para o estabelecimento ${establishmentId}`);
+  console.log(`➡️  POST /api/reserve - Usuário ${userName} solicitou reserva para o estabelecimento ${establishmentId}`);
 
+  const client = await pool.connect();
   try {
-    // 1. Encontra o dono (lojista) e o nome do estabelecimento.
+    await client.query('BEGIN');
+
+    // 1. Busca o usuário e bloqueia a linha para evitar race conditions
+    const userResult = await client.query('SELECT current_plan, reserve_count FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    const user = userResult.rows[0];
+
+    // 2. Verifica se o usuário está no plano gratuito (0) e se atingiu o limite
+    if (user.current_plan === 0 && FREE_PLAN_RESERVATION_LIMIT > 0 && user.reserve_count >= FREE_PLAN_RESERVATION_LIMIT) {
+      console.log(`[RESERVE] Bloqueado: Usuário ${userId} (${userName}) atingiu o limite de ${FREE_PLAN_RESERVATION_LIMIT} reservas do plano gratuito.`);
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        title: 'Limite de Reservas Atingido',
+        message: 'Que bom que você está aproveitando! 🧡 Você atingiu o limite de reservas deste mês no plano gratuito. Que tal dar uma olhada nos nossos planos para reservar pão quentinho sempre que quiser?',
+        limitReached: true
+      });
+    }
+
+    // 3. Se o limite não foi atingido, incrementa o contador de reservas.
+    await client.query(
+      'UPDATE users SET reserve_count = reserve_count + 1 WHERE id = $1',
+      [userId]
+    );
+    console.log(`[RESERVE] Contador de reservas incrementado para o usuário ${userId} - ${userName}.`);
+
+    // 4. Encontra o dono (lojista) e o nome do estabelecimento para notificação.
     const ownerResult = await pool.query(
       'SELECT user_id, nome FROM estabelecimentos WHERE id = $1',
       [establishmentId]
     );
 
     if (ownerResult.rowCount === 0 || !ownerResult.rows[0].user_id) {
-      console.warn(`[RESERVE] Lojista para o estabelecimento ${establishmentId} não encontrado.`);
-      // Retorna sucesso para o cliente, pois a falha é interna.
+      console.warn(`[RESERVE] Lojista para o estabelecimento ${establishmentId} não encontrado. A reserva foi contada, mas a notificação não será enviada.`);
+      // Mesmo sem lojista, a reserva do usuário foi contabilizada, então commitamos e retornamos sucesso.
+      await client.query('COMMIT');
       return res.status(200).json({ message: 'Solicitação processada.' });
     }
 
     const ownerId = ownerResult.rows[0].user_id;
     const establishmentName = ownerResult.rows[0].nome;
 
-    // 2. Busca todas as inscrições de notificação associadas ao ID do lojista.
+    // 5. Busca todas as inscrições de notificação associadas ao ID do lojista.
     const ownerSubscriptionsResult = await pool.query(
       'SELECT subscription_data FROM subscriptions WHERE user_id = $1',
       [ownerId]
@@ -621,7 +752,7 @@ app.post('/api/reserve', async (req, res) => {
       const notificationPayload = JSON.stringify({
         notification: {
           title: 'Solicitação de Reserva!',
-          body: `Um cliente deseja reservar parte da fornada em ${establishmentName}!`,
+          body: `O cliente ${userName} deseja reservar parte da fornada em ${establishmentName}!`,
           icon: 'assets/icons/icon-192x192.png',
         }
       });
@@ -630,10 +761,14 @@ app.post('/api/reserve', async (req, res) => {
       await Promise.allSettled(promises);
     }
 
+    await client.query('COMMIT');
     res.status(200).json({ message: 'Notificação de reserva enviada ao lojista.' });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('❌ Erro ao processar solicitação de reserva:', err.stack);
     res.status(500).json({ message: 'Erro ao processar a reserva.' });
+  } finally {
+    client.release();
   }
 });
 
@@ -690,10 +825,10 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                 body: notificationBody || 'Uma nova fornada acabou de sair! Venha conferir!', // Fallback final
                 icon: 'assets/icons/icon-192x192.png',
                 // Adiciona os mesmos botões de ação das notificações automáticas
-                // actions: [
-                //   { action: 'reserve', title: '🥖 Reservar' },
-                //   { action: 'dismiss', title: '👍 Ok' }
-                // ],
+                actions: [
+                  { action: 'reserve', title: '🥖 Reservar' },
+                  { action: 'dismiss', title: '👍 Agora não' }
+                ],
                 // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                 // saber como agir quando a notificação é clicada com o app fechado.
                 data: {
@@ -701,7 +836,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                     // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                     default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}` },
                     // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}?action=reserve` }
+                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `?open_establishment_id=${estabelecimentoId}&action=reserve` }
                   }
                 }
             }
@@ -840,17 +975,17 @@ const checkFornadasAndNotify = async () => {
                   body: randomMessage,
                   icon: 'assets/icons/icon-192x192.png',
                   // Define os botões que aparecerão na notificação
-                  // actions: [
-                  //   { action: 'reserve', title: '🥖 Reservar' },
-                  //   { action: 'dismiss', title: '👍 Ok' }
-                  // ],
+                  actions: [
+                    { action: 'reserve', title: '🥖 Reservar' },
+                    { action: 'dismiss', title: '👍 Agora não' }
+                  ],
                   // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
                   data: {
                     onActionClick: {
                       // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                       default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}` },
                       // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}?action=reserve` }
+                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `?open_establishment_id=${est.id}&action=reserve` }
                       // O botão 'dismiss' não precisa de ação aqui, pois o Service Worker o ignora por padrão.
                     }
                   }
@@ -882,6 +1017,20 @@ const checkFornadasAndNotify = async () => {
     }
   } catch (err) {
     console.error('❌ [CRON] Erro ao verificar fornadas:', err);
+  }
+};
+
+/**
+ * Zera o contador de reservas de todos os usuários.
+ * Agendado para rodar à meia-noite do primeiro dia de cada mês.
+ */
+const resetReserveCounts = async () => {
+  console.log('🗓️  [CRON] Iniciando rotina mensal para zerar contagem de reservas...');
+  try {
+    const result = await pool.query('UPDATE users SET reserve_count = 0');
+    console.log(`✅ [CRON] Contagem de reservas zerada. ${result.rowCount} usuários foram atualizados.`);
+  } catch (err) {
+    console.error('❌ [CRON] Erro ao zerar a contagem de reservas:', err.stack);
   }
 };
 
@@ -922,6 +1071,9 @@ const startServer = async () => {
 
       // Agenda a verificação de fornadas para rodar a cada 5 minutos.
       cron.schedule('*/5 * * * *', checkFornadasAndNotify, { timezone: "America/Sao_Paulo" });
+
+      // Agenda a rotina para zerar a contagem de reservas todo dia 1º do mês à meia-noite.
+      cron.schedule('0 0 1 * *', resetReserveCounts, { timezone: "America/Sao_Paulo" });
     });
   } catch (err) {
     console.error('🔥 Falha ao iniciar o servidor:', err.message);
