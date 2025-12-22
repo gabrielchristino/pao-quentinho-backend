@@ -877,6 +877,8 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
         const nowTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
         const encodedTime = encodeURIComponent(nowTime);
 
+        console.log(`[NOTIFY] URL de reserva manual gerada: /reservar/${estabelecimentoId}/horario/${encodedTime}`);
+
         const notificationPayload = {
             notification: {
                 title: title || `Fornada Quentinha${establishmentName ? ' em ' + establishmentName : ''}!`,
@@ -1042,6 +1044,8 @@ const checkFornadasAndNotify = async () => {
               const reserveUrl = fornadaId 
                 ? `/reservar/${est.id}/fornada/${fornadaId}` 
                 : `/reservar/${est.id}/horario/${encodedTime}`;
+
+              console.log(`[CRON] URL de reserva agendada gerada: ${reserveUrl}`);
 
               const notificationPayload = {
                 notification: {
