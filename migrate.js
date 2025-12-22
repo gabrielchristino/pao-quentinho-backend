@@ -107,6 +107,26 @@ async function run() {
       );
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reservations (
+        id SERIAL PRIMARY KEY,
+        establishment_id INTEGER REFERENCES estabelecimentos(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        reservation_time VARCHAR(10),
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Adiciona a coluna reservation_time se ela não existir (para tabelas já criadas)
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT FROM pg_attribute WHERE attrelid = 'reservations'::regclass AND attname = 'reservation_time') THEN
+          ALTER TABLE reservations ADD COLUMN reservation_time VARCHAR(10);
+        END IF;
+      END$$;
+    `);
+
     console.log('Tabela "plans" verificada/criada. Inserindo plano padrão se necessário...');
 
     await client.query(

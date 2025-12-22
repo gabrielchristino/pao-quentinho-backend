@@ -259,6 +259,35 @@ app.delete('/api/estabelecimentos/:id', lojistaRequired, async (req, res) => {
   }
 });
 
+// Rota para listar as reservas de um estabelecimento (Lojista)
+app.get('/api/estabelecimentos/:id/reservas', lojistaRequired, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+
+  console.log(`➡️  GET /api/estabelecimentos/${id}/reservas - Solicitado pelo lojista ${userId}`);
+
+  try {
+    // Verifica se o estabelecimento pertence ao lojista
+    const verifyOwner = await pool.query('SELECT id FROM estabelecimentos WHERE id = $1 AND user_id = $2', [id, userId]);
+    if (verifyOwner.rowCount === 0) {
+      return res.status(403).json({ message: 'Você não tem permissão para ver as reservas deste estabelecimento.' });
+    }
+
+    const query = `
+      SELECT r.id, r.created_at, r.reservation_time, u.name as user_name, u.email as user_email
+      FROM reservations r
+      JOIN users u ON r.user_id = u.id
+      WHERE r.establishment_id = $1
+      ORDER BY r.created_at DESC
+    `;
+    const result = await pool.query(query, [id]);
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(`❌ Erro ao buscar reservas do estabelecimento ${id}:`, err.stack);
+    res.status(500).json({ message: 'Erro ao buscar reservas.' });
+  }
+});
+
 // --- ROTAS DE USUÁRIO LOGADO ---
 
 // Rota para buscar os estabelecimentos de um usuário logado
@@ -687,7 +716,7 @@ app.delete('/api/unsubscribe', async (req, res) => {
 });
 
 app.post('/api/reserve', authRequired, async (req, res) => {
-  const { establishmentId } = req.body; // O ID do estabelecimento vem do corpo da requisição
+  const { establishmentId, reservationTime, fornadaId } = req.body; // Aceita fornadaId também
   const userId = req.user.userId; // O ID do usuário vem do token (middleware authRequired)
   const userName = req.user.name; // O nome do usuário vem do token (middleware authRequired)
 
@@ -723,7 +752,27 @@ app.post('/api/reserve', authRequired, async (req, res) => {
     );
     console.log(`[RESERVE] Contador de reservas incrementado para o usuário ${userId} - ${userName}.`);
 
-    // 4. Encontra o dono (lojista) e o nome do estabelecimento para notificação.
+    let finalReservationTime = reservationTime;
+
+    // Se veio um ID de fornada, buscamos o horário e a descrição no cadastro do estabelecimento
+    if (fornadaId) {
+      const estResult = await client.query('SELECT details FROM estabelecimentos WHERE id = $1', [establishmentId]);
+      if (estResult.rowCount > 0) {
+        const fornadas = estResult.rows[0].details.proximaFornada || [];
+        // Encontra a fornada pelo ID (suporta estrutura nova de objetos)
+        const found = fornadas.find(f => f.id === fornadaId);
+        if (found) {
+          finalReservationTime = found.time;
+          console.log(`[RESERVE] Fornada ID ${fornadaId} resolvida para o horário ${finalReservationTime}.`);
+        }
+      }
+    }
+
+    // 4. Salva a reserva na tabela de histórico
+    await client.query('INSERT INTO reservations (establishment_id, user_id, reservation_time) VALUES ($1, $2, $3)', [establishmentId, userId, finalReservationTime]);
+    console.log(`[RESERVE] Reserva registrada na tabela 'reservations' para o horário: ${finalReservationTime || 'N/A'}.`);
+
+    // 5. Encontra o dono (lojista) e o nome do estabelecimento para notificação.
     const ownerResult = await pool.query(
       'SELECT user_id, nome FROM estabelecimentos WHERE id = $1',
       [establishmentId]
@@ -739,7 +788,7 @@ app.post('/api/reserve', authRequired, async (req, res) => {
     const ownerId = ownerResult.rows[0].user_id;
     const establishmentName = ownerResult.rows[0].nome;
 
-    // 5. Busca todas as inscrições de notificação associadas ao ID do lojista.
+    // 6. Busca todas as inscrições de notificação associadas ao ID do lojista.
     const ownerSubscriptionsResult = await pool.query(
       'SELECT subscription_data FROM subscriptions WHERE user_id = $1',
       [ownerId]
@@ -752,7 +801,7 @@ app.post('/api/reserve', authRequired, async (req, res) => {
       const notificationPayload = JSON.stringify({
         notification: {
           title: 'Solicitação de Reserva!',
-          body: `O cliente ${userName} deseja reservar parte da fornada em ${establishmentName}!`,
+          body: `O cliente ${userName} deseja reservar parte da fornada ${finalReservationTime ? 'das ' + finalReservationTime + ' ' : ''}em ${establishmentName}!`,
           icon: 'assets/icons/icon-192x192.png',
         }
       });
@@ -819,6 +868,9 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
           }
         }
 
+        // Pega o horário atual formatado para notificações manuais
+        const nowTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+
         const notificationPayload = {
             notification: {
                 title: title || `Fornada Quentinha${establishmentName ? ' em ' + establishmentName : ''}!`,
@@ -836,7 +888,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                     // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                     default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}` },
                     // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `?open_establishment_id=${estabelecimentoId}&action=reserve` }
+                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `?open_establishment_id=${estabelecimentoId}&action=reserve&time=${nowTime}` }
                   }
                 }
             }
@@ -929,9 +981,19 @@ const checkFornadasAndNotify = async () => {
       }
 
       // Itera sobre cada horário de fornada cadastrado
-      for (const fornadaTime of fornadas) {
-        // Garante que estamos lidando com uma string antes de usar .split()
-        if (typeof fornadaTime === 'string') {
+      for (const fornadaItem of fornadas) {
+        let fornadaTime, fornadaId, fornadaDescription;
+
+        // Suporte híbrido: string antiga ou objeto novo { id, time, description }
+        if (typeof fornadaItem === 'string') {
+          fornadaTime = fornadaItem;
+        } else {
+          fornadaTime = fornadaItem.time;
+          fornadaId = fornadaItem.id;
+          fornadaDescription = fornadaItem.description;
+        }
+
+        if (fornadaTime) {
           const [fornadaHours, fornadaMinutes] = fornadaTime.split(':').map(Number);
           const fornadaTotalMinutes = (fornadaHours * 60) + fornadaMinutes;
           console.log(`[CRON] Estabelecimento ${est.id} (${est.nome}) - Verificando fornada das ${fornadaTime} (${fornadaTotalMinutes} min do dia)`);
@@ -965,7 +1027,7 @@ const checkFornadasAndNotify = async () => {
               // Seleciona uma mensagem aleatória da lista já buscada
               const randomMessage = randomMessages.length > 0
                 ? randomMessages[Math.floor(Math.random() * randomMessages.length)].message.replace('Pão quentinho', 'Pão quentinho saindo')
-                : `Uma nova fornada sairá às ${fornadaTime}. Não perca!`;
+                : `Uma nova fornada ${fornadaDescription ? 'de ' + fornadaDescription + ' ' : ''}sairá às ${fornadaTime}. Não perca!`;
 
               console.log(`[CRON] Mensagem selecionada para notificação: "${randomMessage}"`);
 
@@ -985,7 +1047,7 @@ const checkFornadasAndNotify = async () => {
                       // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                       default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}` },
                       // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `?open_establishment_id=${est.id}&action=reserve` }
+                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `?open_establishment_id=${est.id}&action=reserve&${fornadaId ? 'fornadaId=' + fornadaId : 'time=' + fornadaTime}` }
                       // O botão 'dismiss' não precisa de ação aqui, pois o Service Worker o ignora por padrão.
                     }
                   }
