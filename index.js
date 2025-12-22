@@ -25,7 +25,9 @@ const pool = new Pool({
 });
 
 // --- Constantes de Planos ---
-const FREE_PLAN_RESERVATION_LIMIT = 5; // Limite de reservas por mês para o plano gratuito
+ // Limite de reservas por mês para o plano gratuito. O valor padrão é 5, mas pode ser sobrescrito pela variável de ambiente.
+const envLimit = parseInt(process.env.FREE_PLAN_RESERVATION_LIMIT, 10);
+const FREE_PLAN_RESERVATION_LIMIT = !isNaN(envLimit) ? envLimit : 5;
 
 // Middlewares
 app.use(cors());
@@ -704,7 +706,7 @@ app.post('/api/reserve', authRequired, async (req, res) => {
     const user = userResult.rows[0];
 
     // 2. Verifica se o usuário está no plano gratuito (0) e se atingiu o limite
-    if (user.current_plan === 0 && user.reserve_count >= FREE_PLAN_RESERVATION_LIMIT) {
+    if (user.current_plan === 0 && FREE_PLAN_RESERVATION_LIMIT > 0 && user.reserve_count >= FREE_PLAN_RESERVATION_LIMIT) {
       console.log(`[RESERVE] Bloqueado: Usuário ${userId} (${userName}) atingiu o limite de ${FREE_PLAN_RESERVATION_LIMIT} reservas do plano gratuito.`);
       await client.query('ROLLBACK');
       return res.status(403).json({
