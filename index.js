@@ -875,6 +875,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
 
         // Pega o horário atual formatado para notificações manuais
         const nowTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+        const encodedTime = encodeURIComponent(nowTime);
 
         const notificationPayload = {
             notification: {
@@ -893,7 +894,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                     // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                     default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}` },
                     // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/reservar/${estabelecimentoId}/horario/${nowTime}` }
+                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/reservar/${estabelecimentoId}/horario/${encodedTime}` }
                   }
                 }
             }
@@ -1037,9 +1038,10 @@ const checkFornadasAndNotify = async () => {
               console.log(`[CRON] Mensagem selecionada para notificação: "${randomMessage}"`);
 
               // Define a URL de reserva baseada no tipo de dado disponível (ID ou Horário)
+              const encodedTime = encodeURIComponent(fornadaTime);
               const reserveUrl = fornadaId 
                 ? `/reservar/${est.id}/fornada/${fornadaId}` 
-                : `/reservar/${est.id}/horario/${fornadaTime}`;
+                : `/reservar/${est.id}/horario/${encodedTime}`;
 
               const notificationPayload = {
                 notification: {
