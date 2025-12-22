@@ -893,7 +893,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                     // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                     default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}` },
                     // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}?action=reserve&time=${nowTime}` }
+                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/reservar/${estabelecimentoId}/horario/${nowTime}` }
                   }
                 }
             }
@@ -1036,6 +1036,11 @@ const checkFornadasAndNotify = async () => {
 
               console.log(`[CRON] Mensagem selecionada para notificação: "${randomMessage}"`);
 
+              // Define a URL de reserva baseada no tipo de dado disponível (ID ou Horário)
+              const reserveUrl = fornadaId 
+                ? `/reservar/${est.id}/fornada/${fornadaId}` 
+                : `/reservar/${est.id}/horario/${fornadaTime}`;
+
               const notificationPayload = {
                 notification: {
                   title: isAlmostTime ? `Está saindo agora em ${est.nome}!` : `Falta 1h para a fornada em ${est.nome}!`,
@@ -1052,7 +1057,7 @@ const checkFornadasAndNotify = async () => {
                       // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                       default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}` },
                       // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}?action=reserve&${fornadaId ? 'fornadaId=' + fornadaId : 'time=' + fornadaTime}` }
+                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: reserveUrl }
                       // O botão 'dismiss' não precisa de ação aqui, pois o Service Worker o ignora por padrão.
                     }
                   }
