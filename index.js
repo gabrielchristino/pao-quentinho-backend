@@ -939,7 +939,6 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                 icon: 'assets/icons/icon-192x192.png',
                 // Adiciona os mesmos botões de ação das notificações automáticas
                 actions: [
-                  { action: 'reserve', title: '🥖 Reservar' },
                   { action: 'dismiss', title: '👍 Agora não' }
                 ],
                 // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
@@ -948,8 +947,6 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                   onActionClick: {
                     // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                     default: { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/reservar/${encodedToken}` },
-                    // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/reservar/${encodedToken}` }
                   }
                 }
             }
@@ -1111,7 +1108,6 @@ const checkFornadasAndNotify = async () => {
                   icon: 'assets/icons/icon-192x192.png',
                   // Define os botões que aparecerão na notificação
                   actions: [
-                    { action: 'reserve', title: '🥖 Reservar' },
                     { action: 'dismiss', title: '👍 Agora não' }
                   ],
                   // A propriedade 'data' é crucial para o Service Worker do Angular (ngsw)
@@ -1119,8 +1115,6 @@ const checkFornadasAndNotify = async () => {
                     onActionClick: {
                       // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                       default: { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/reservar/${encodeURIComponent(reservationToken)}` },
-                      // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/reservar/${encodeURIComponent(reservationToken)}` }
                       // O botão 'dismiss' não precisa de ação aqui, pois o Service Worker o ignora por padrão.
                     }
                   }
