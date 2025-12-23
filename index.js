@@ -643,6 +643,7 @@ app.post('/api/subscribe', optionalAuth, async (req, res) => {
 
         if (ownerSubscriptions.length > 0) {
           console.log(`[NOTIFY-LOJISTA] Encontradas ${ownerSubscriptions.length} inscrições para o lojista. Enviando notificações...`);
+          const baseUrl = process.env.APP_BASE_URL || '';
           const notificationPayload = JSON.stringify({
             notification: {
               title: 'Novo Seguidor!',
@@ -650,7 +651,7 @@ app.post('/api/subscribe', optionalAuth, async (req, res) => {
               icon: 'assets/icons/icon-192x192.png',
               data: {
                 onActionClick: {
-                  default: { operation: 'navigateLastFocusedOrOpen', url: '/meus-estabelecimentos' }
+                  default: { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/meus-estabelecimentos` }
                 }
               }
             }
@@ -798,6 +799,7 @@ app.post('/api/reserve', authRequired, async (req, res) => {
 
     if (ownerSubscriptions.length > 0) {
       console.log(`[RESERVE] Enviando notificação de reserva para ${ownerSubscriptions.length} dispositivo(s) do lojista.`);
+      const baseUrl = process.env.APP_BASE_URL || '';
       const notificationPayload = JSON.stringify({
         notification: {
           title: 'Solicitação de Reserva!',
@@ -805,7 +807,7 @@ app.post('/api/reserve', authRequired, async (req, res) => {
           icon: 'assets/icons/icon-192x192.png',
           data: {
             onActionClick: {
-              default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${establishmentId}/reservas` }
+              default: { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/estabelecimento/${establishmentId}/reservas` }
             }
           }
         }
@@ -876,6 +878,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
         // Pega o horário atual formatado para notificações manuais
         const nowTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
         const encodedTime = encodeURIComponent(nowTime);
+        const baseUrl = process.env.APP_BASE_URL || '';
 
         console.log(`[NOTIFY] URL de reserva manual gerada: /reservar/${estabelecimentoId}/horario/${encodedTime}`);
 
@@ -894,9 +897,9 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                 data: {
                   onActionClick: {
                     // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
-                    default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${estabelecimentoId}` },
+                    default: { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/estabelecimento/${estabelecimentoId}` },
                     // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `/reservar/${estabelecimentoId}/horario/${encodedTime}` }
+                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/reservar/${estabelecimentoId}/horario/${encodedTime}` }
                   }
                 }
             }
@@ -1040,6 +1043,7 @@ const checkFornadasAndNotify = async () => {
               console.log(`[CRON] Mensagem selecionada para notificação: "${randomMessage}"`);
 
               // Define a URL de reserva baseada no tipo de dado disponível (ID ou Horário)
+              const baseUrl = process.env.APP_BASE_URL || '';
               const encodedTime = encodeURIComponent(fornadaTime);
               const reserveUrl = fornadaId 
                 ? `/reservar/${est.id}/fornada/${fornadaId}` 
@@ -1061,9 +1065,9 @@ const checkFornadasAndNotify = async () => {
                   data: {
                     onActionClick: {
                       // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
-                      default: { operation: 'navigateLastFocusedOrOpen', url: `/estabelecimento/${est.id}` },
+                      default: { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/estabelecimento/${est.id}` },
                       // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: reserveUrl }
+                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}${reserveUrl}` }
                       // O botão 'dismiss' não precisa de ação aqui, pois o Service Worker o ignora por padrão.
                     }
                   }
