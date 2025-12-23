@@ -33,6 +33,24 @@ const FREE_PLAN_RESERVATION_LIMIT = !isNaN(envLimit) ? envLimit : 5;
 app.use(cors());
 app.use(express.json());
 
+// --- Helpers para Token de Reserva ---
+const generateReservationToken = (type, estId, val) => {
+  // Formato: TIPO:EST_ID:VALOR (ex: M:1:14:30 ou S:1:abc-123)
+  // M = Manual, S = Scheduled (ID), T = Time (Scheduled String)
+  const str = `${type}:${estId}:${val}`;
+  return Buffer.from(str).toString('base64');
+};
+
+const decodeReservationToken = (token) => {
+  try {
+    const str = Buffer.from(token, 'base64').toString('utf-8');
+    const [type, estId, val] = str.split(':');
+    return { type, estId: parseInt(estId, 10), val };
+  } catch (e) {
+    return null;
+  }
+};
+
 // --- Configuração das Notificações Push ---
 // As chaves são lidas das variáveis de ambiente do Railway
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
@@ -717,9 +735,22 @@ app.delete('/api/unsubscribe', async (req, res) => {
 });
 
 app.post('/api/reserve', authRequired, async (req, res) => {
-  const { establishmentId, reservationTime, fornadaId } = req.body; // Aceita fornadaId também
+  let { establishmentId, reservationTime, fornadaId, reservationToken } = req.body;
   const userId = req.user.userId; // O ID do usuário vem do token (middleware authRequired)
   const userName = req.user.name; // O nome do usuário vem do token (middleware authRequired)
+
+  // Se um token foi fornecido, decodifica para obter os dados
+  if (reservationToken) {
+    const decoded = decodeReservationToken(reservationToken);
+    if (decoded) {
+      establishmentId = decoded.estId;
+      if (decoded.type === 'S') {
+        fornadaId = decoded.val;
+      } else {
+        reservationTime = decoded.val; // Tipos 'M' (Manual) e 'T' (Time) usam o valor como horário
+      }
+    }
+  }
 
   if (!establishmentId) {
     return res.status(400).json({ message: 'ID do estabelecimento é obrigatório.' });
@@ -890,10 +921,13 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
 
         // Pega o horário atual formatado para notificações manuais
         const nowTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
-        const encodedTime = encodeURIComponent(nowTime);
         const baseUrl = process.env.APP_BASE_URL || '';
+        
+        // Gera um token único para esta notificação manual (Tipo 'M')
+        const reservationToken = generateReservationToken('M', estabelecimentoId, nowTime);
+        const encodedToken = encodeURIComponent(reservationToken);
 
-        console.log(`[NOTIFY] URL de reserva manual gerada: /reservar/${estabelecimentoId}/horario/${encodedTime}`);
+        console.log(`[NOTIFY] URL de reserva manual gerada: /reservar/${encodedToken}`);
 
         const notificationPayload = {
             notification: {
@@ -912,7 +946,7 @@ app.post('/api/notify/:estabelecimentoId', async (req, res) => {
                     // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                     default: { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/estabelecimento/${estabelecimentoId}` },
                     // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/reservar/${estabelecimentoId}/horario/${encodedTime}` }
+                    'reserve': { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/reservar/${encodedToken}` }
                   }
                 }
             }
@@ -1057,12 +1091,15 @@ const checkFornadasAndNotify = async () => {
 
               // Define a URL de reserva baseada no tipo de dado disponível (ID ou Horário)
               const baseUrl = process.env.APP_BASE_URL || '';
-              const encodedTime = encodeURIComponent(fornadaTime);
-              const reserveUrl = fornadaId 
-                ? `/reservar/${est.id}/fornada/${fornadaId}` 
-                : `/reservar/${est.id}/horario/${encodedTime}`;
+              
+              let reservationToken;
+              if (fornadaId) {
+                reservationToken = generateReservationToken('S', est.id, fornadaId);
+              } else {
+                reservationToken = generateReservationToken('T', est.id, fornadaTime);
+              }
 
-              console.log(`[CRON] URL de reserva agendada gerada: ${reserveUrl}`);
+              console.log(`[CRON] Token gerado: ${reservationToken}`);
 
               const notificationPayload = {
                 notification: {
@@ -1080,7 +1117,7 @@ const checkFornadasAndNotify = async () => {
                       // Ação padrão (clicar no corpo da notificação) abre o card do estabelecimento.
                       default: { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/estabelecimento/${est.id}` },
                       // Ação para o botão 'reserve' abre a página de confirmação da reserva.
-                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}${reserveUrl}` }
+                      'reserve': { operation: 'navigateLastFocusedOrOpen', url: `${baseUrl}/reservar/${encodeURIComponent(reservationToken)}` }
                       // O botão 'dismiss' não precisa de ação aqui, pois o Service Worker o ignora por padrão.
                     }
                   }
