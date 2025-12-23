@@ -735,6 +735,19 @@ app.post('/api/reserve', authRequired, async (req, res) => {
     const userResult = await client.query('SELECT current_plan, reserve_count FROM users WHERE id = $1 FOR UPDATE', [userId]);
     const user = userResult.rows[0];
 
+    // Verifica duplicidade (reserva criada nos últimos 30 segundos pelo mesmo usuário no mesmo local)
+    const duplicateCheck = await client.query(
+      `SELECT id FROM reservations 
+       WHERE user_id = $1 AND establishment_id = $2 AND created_at > NOW() - INTERVAL '30 seconds'`,
+      [userId, establishmentId]
+    );
+
+    if (duplicateCheck.rowCount > 0) {
+      console.log(`[RESERVE] Solicitação duplicada detectada para o usuário ${userId}. Ignorando.`);
+      await client.query('ROLLBACK');
+      return res.status(200).json({ message: 'Solicitação processada.' });
+    }
+
     // 2. Verifica se o usuário está no plano gratuito (0) e se atingiu o limite
     if (user.current_plan === 0 && FREE_PLAN_RESERVATION_LIMIT > 0 && user.reserve_count >= FREE_PLAN_RESERVATION_LIMIT) {
       console.log(`[RESERVE] Bloqueado: Usuário ${userId} (${userName}) atingiu o limite de ${FREE_PLAN_RESERVATION_LIMIT} reservas do plano gratuito.`);
