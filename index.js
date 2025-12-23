@@ -862,7 +862,10 @@ app.post('/api/reserve', authRequired, async (req, res) => {
     }
 
     await client.query('COMMIT');
-    res.status(200).json({ message: 'Notificação de reserva enviada ao lojista.' });
+    res.status(200).json({ 
+      message: 'Notificação de reserva enviada ao lojista.',
+      establishmentId: establishmentId 
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('❌ Erro ao processar solicitação de reserva:', err.stack);
