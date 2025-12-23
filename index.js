@@ -44,8 +44,11 @@ const generateReservationToken = (type, estId, val) => {
 const decodeReservationToken = (token) => {
   try {
     const str = Buffer.from(token, 'base64').toString('utf-8');
-    const [type, estId, val] = str.split(':');
-    return { type, estId: parseInt(estId, 10), val };
+    const parts = str.split(':');
+    const type = parts[0];
+    const estId = parseInt(parts[1], 10);
+    const val = parts.slice(2).join(':'); // Reconstrói o valor caso contenha ':' (ex: 10:30)
+    return { type, estId, val };
   } catch (e) {
     return null;
   }
@@ -1083,11 +1086,23 @@ const checkFornadasAndNotify = async () => {
 
             if (subscriptions.length > 0) {
               // Seleciona uma mensagem aleatória da lista já buscada
-              const randomMessage = randomMessages.length > 0
-                ? randomMessages[Math.floor(Math.random() * randomMessages.length)].message.replace('Pão quentinho', 'Pão quentinho saindo')
-                : `Uma nova fornada ${fornadaDescription ? 'de ' + fornadaDescription + ' ' : ''}sairá às ${fornadaTime}. Não perca!`;
+              const funPhrase = randomMessages.length > 0
+                ? randomMessages[Math.floor(Math.random() * randomMessages.length)].message
+                : 'Fornada chegando!';
 
-              console.log(`[CRON] Mensagem selecionada para notificação: "${randomMessage}"`);
+              // Monta a informação específica da fornada
+              const descPart = fornadaDescription ? ` de ${fornadaDescription}` : '';
+              let specificInfo = '';
+
+              if (isAlmostTime) {
+                specificInfo = `Saindo às ${fornadaTime}${descPart}. Corre que é daqui a 5 minutos!`;
+              } else {
+                specificInfo = `Vai sair às ${fornadaTime}${descPart}. Falta 1 hora.`;
+              }
+
+              const finalMessage = `${funPhrase} ${specificInfo}`;
+
+              console.log(`[CRON] Mensagem montada: "${finalMessage}"`);
 
               // Define a URL de reserva baseada no tipo de dado disponível (ID ou Horário)
               const baseUrl = process.env.APP_BASE_URL || '';
@@ -1104,7 +1119,7 @@ const checkFornadasAndNotify = async () => {
               const notificationPayload = {
                 notification: {
                   title: isAlmostTime ? `Está saindo agora em ${est.nome}!` : `Falta 1h para a fornada em ${est.nome}!`,
-                  body: randomMessage,
+                  body: finalMessage,
                   icon: 'assets/icons/icon-192x192.png',
                   // Define os botões que aparecerão na notificação
                   actions: [
